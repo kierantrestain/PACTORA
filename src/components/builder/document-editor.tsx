@@ -177,7 +177,13 @@ const saveStatusLabels: Record<SaveStatus, string> = {
   saving: "Saving…",
 };
 
-export function DocumentEditor({ document }: { document: BuilderDocument }) {
+export function DocumentEditor({
+  currentUser,
+  document,
+}: {
+  currentUser: { email: string; name: string };
+  document: BuilderDocument;
+}) {
   const router = useRouter();
   const [title, setTitle] = useState(document.title);
   const [content, setContent] = useState<BuilderContent>(document.content);
@@ -888,6 +894,7 @@ export function DocumentEditor({ document }: { document: BuilderDocument }) {
 
       {isSendOpen ? (
         <SendForSignatureDialog
+          currentUser={currentUser}
           documentId={document.id}
           flush={flush}
           onClose={() => setIsSendOpen(false)}

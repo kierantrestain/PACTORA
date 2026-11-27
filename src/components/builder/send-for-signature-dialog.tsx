@@ -16,12 +16,14 @@ import type { BuilderRole } from "@/lib/document-builder/model";
 type Recipient = { email: string; name: string };
 
 export function SendForSignatureDialog({
+  currentUser,
   documentId,
   flush,
   onClose,
   problems,
   roles,
 }: {
+  currentUser: { email: string; name: string };
   documentId: string;
   flush: () => Promise<boolean>;
   onClose: () => void;
@@ -120,9 +122,26 @@ export function SendForSignatureDialog({
           <ol className="space-y-4">
             {roles.map((role, index) => (
               <li className="well space-y-3 p-4" key={role.id}>
-                <p className="text-sm font-extrabold text-(--fg)">
-                  {index + 1}. {role.name}
-                </p>
+                <div className="flex items-center justify-between gap-3">
+                  <p className="text-sm font-extrabold text-(--fg)">
+                    {index + 1}. {role.name}
+                  </p>
+                  <button
+                    className="text-sm font-semibold text-(--accent-ink) hover:underline"
+                    onClick={() =>
+                      setRecipients((current) => ({
+                        ...current,
+                        [role.id]: {
+                          email: currentUser.email,
+                          name: currentUser.name,
+                        },
+                      }))
+                    }
+                    type="button"
+                  >
+                    That&rsquo;s me
+                  </button>
+                </div>
                 <div className="grid gap-3 sm:grid-cols-2">
                   <label className="space-y-1 text-xs font-semibold text-(--secondary)">
                     <span className="block">Full name</span>

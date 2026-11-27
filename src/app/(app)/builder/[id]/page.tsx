@@ -20,5 +20,10 @@ export default async function BuilderDocumentPage({
     notFound();
   }
 
-  return <DocumentEditor document={document} />;
+  return (
+    <DocumentEditor
+      currentUser={{ email: session!.user.email, name: session!.user.name }}
+      document={document}
+    />
+  );
 }
