@@ -25,7 +25,7 @@ Everything about running your own PACTORA: deploying it, setting it up, what it 
 5. **Open your new site.** It takes you to a setup page, where you name your organization, give the email address people should write to for help, and create the first account. That account is the administrator.
 6. **Set up the address you send from.** Under Settings, Organization, enter an address at your own domain in "Send email from" and save (the setup page offers the same field). The site lists the DNS records for that domain and checks them for you. Add them where your domain is managed. If your Resend key is not allowed to manage domains, the page sends you to Resend's dashboard for this step instead.
 
-![The setup page of a new install](images/setup.png)
+![Creating the owner account of a new workspace](images/setup.png)
 
 Step 6 is the one part that cannot be done for you: every email provider asks for proof that you own the domain you send from. While "Send email from" is empty, email goes out from Resend's test address, which Resend delivers only to the email address of the Resend account itself, normally the one on your Vercel account. So to try the whole product straight away, leave that field empty and send a document to that address. Once you save an address of your own, email is sent from it, and Resend does not deliver it until the domain shows as verified. Add the records before you count on it.
 
@@ -56,7 +56,18 @@ Add your domain to the project in Vercel (Settings, Domains), then deploy once m
 
 ### Lock down a new install
 
-A new install is claimed by whoever opens it first. That is normally you, seconds after the deployment finishes. If its address will be known to others before you get there, add a `SETUP_TOKEN` environment variable in Vercel with a secret of your own and deploy again: the setup page then asks for it.
+Nobody can make themselves the owner (the first administrator) of a public deployment from the web. Choose one of these:
+
+- **Development and testing deployments.** Turn on [Vercel Authentication](https://vercel.com/docs/deployment-protection/methods-to-protect-deployments/vercel-authentication) for the deployment (Settings, Deployment Protection), so only your Vercel team can open it, then add `PACTORA_ACCESS_PROTECTED=1` and redeploy. The first person to create an account at `/signup` becomes the owner, with no token. Make sure the protection covers the URL you use: Vercel's Standard Protection leaves the production domain public.
+- **Production.** Create the owner with the database credentials, from your own machine:
+
+  ```bash
+  DATABASE_URL=<the database URL> npm run owner:provision -- --email you@company.com --name "Your Name"
+  ```
+
+  The password is read from `OWNER_PASSWORD` or typed at a hidden prompt. For scripted installs, `OWNER_PROVISIONING_TOKEN` (or the older `SETUP_TOKEN`) lets `POST /api/setup` create the owner with that token instead.
+
+Local development (`npm run dev`) needs neither: the first account registered becomes the owner.
 
 ### Database variables marked "Needs Attention"
 
@@ -127,37 +138,39 @@ The graft only lives in your local clone. The merge itself is a normal commit th
 
 A deployment made with the button needs no environment variables. These are there if you want them, under Settings, Environment Variables in the Vercel project. Deploy again after changing one.
 
-| Variable                                            | What it does                                                                                                                                                                                           |
-| --------------------------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------ |
-| `SETUP_TOKEN`                                       | A secret the setup page asks for. See [Lock down a new install](#lock-down-a-new-install).                                                                                                             |
-| `CRON_SECRET`                                       | Closes the daily cleanup route to everyone but Vercel's own cron call. See [Daily cleanup](#daily-cleanup).                                                                                            |
-| `BOTID`                                             | `1` turns on Vercel BotID for sign-in, sign-up and setup. See [Bot protection](#bot-protection).                                                                                                       |
-| `RESEND_FROM_EMAIL`, `SUPPORT_EMAIL`                | Fix the sender and support addresses from the environment instead of in Settings.                                                                                                                      |
-| `BETTER_AUTH_SECRET`                                | Your own secret for signing sessions. Without it one is derived from the database password, so changing that password signs everyone out.                                                              |
-| `APP_URL`                                           | The site's public address, if it should not be the project's production domain.                                                                                                                        |
-| `HOSTED_MODE`                                       | `1` runs PACTORA as a public service under its own name. See [Hosted mode](#hosted-mode).                                                                                                             |
-| `RESEND_REGION`                                     | Where Resend sends from when the app adds your domain, for example `eu-west-1`. See [Running in the EU](#running-in-the-eu).                                                                           |
-| `SEAL_P12_BASE64`, `SEAL_P12_PASSWORD`              | Seal finished PDFs with a certificate from a certificate authority instead of the install's own. See [Signed PDFs and the seal](#signed-pdfs-and-the-seal).                                            |
-| `SEAL_TIMESTAMP_URL`                                | An RFC 3161 timestamp server that adds a trusted time to each seal, and long-term validation. See [Long-term validation](#long-term-validation).                                                       |
-| `MAX_SIGNERS_PER_ENVELOPE`                          | The most signers one envelope can have, from 1 to 100. 25 when unset. See [Signing order](signing-order.md).                                                                                           |
-| `EIDEASY_CLIENT_ID`, `EIDEASY_SECRET`               | Let senders ask for advanced or qualified signatures in the signers' own names, through eID Easy. See [Signatures in the signers' own names](#signatures-in-the-signers-own-names-eidas-ades-and-qes). |
-| `CSC_API_URL`, `CSC_CLIENT_ID`, `CSC_CLIENT_SECRET` | The same through a trust service provider's remote signing service (CSC API v2). See [Signatures in the signers' own names](#signatures-in-the-signers-own-names-eidas-ades-and-qes).                  |
-| `BACKUP_BLOB_READ_WRITE_TOKEN`, `BACKUP_KEEP_DAYS`  | A daily backup of the database and files to a second Blob store. See [Backup and restore](backup-and-restore.md).                                                                                      |
-| `AUDIT_LOG`                                         | `off` keeps audit rows out of the function logs. See [Send the audit trail to your SIEM](#send-the-audit-trail-to-your-siem).                                                                          |
-| `SSO_ISSUER`, `SSO_CLIENT_ID`, `SSO_CLIENT_SECRET`  | Sign in through your organization's identity provider (Okta, Entra ID, Google Workspace). `PASSWORD_SIGN_IN=off` then turns passwords off. See [Single sign-on](#single-sign-on).                      |
+| Variable                                                                | What it does                                                                                                                                                                                           |
+| ----------------------------------------------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------ |
+| `PACTORA_ACCESS_PROTECTED`                                              | `1` when every request already passes an access gate (Vercel Authentication, a VPN). Lets the first account registered become the owner. See [Lock down a new install](#lock-down-a-new-install).      |
+| `OWNER_PROVISIONING_TOKEN`                                              | Optional token for scripted owner creation through `POST /api/setup` (`SETUP_TOKEN` is still read).                                                                                                    |
+| `GOOGLE_CLIENT_ID`, `GOOGLE_CLIENT_SECRET`                              | Sign in with Google, and connect Gmail or Google Workspace mailboxes to send from.                                                                                                                     |
+| `MICROSOFT_CLIENT_ID`, `MICROSOFT_CLIENT_SECRET`, `MICROSOFT_TENANT_ID` | Sign in with Microsoft, and connect Microsoft 365 or Outlook.com mailboxes. The tenant defaults to `common`.                                                                                           |
+| `CRON_SECRET`                                                           | Closes the daily cleanup route to everyone but Vercel's own cron call. See [Daily cleanup](#daily-cleanup).                                                                                            |
+| `RESEND_FROM_EMAIL`, `SUPPORT_EMAIL`                                    | Fix the sender and support addresses from the environment instead of in Settings.                                                                                                                      |
+| `BETTER_AUTH_SECRET`                                                    | Your own secret for signing sessions. Without it one is derived from the database password, so changing that password signs everyone out.                                                              |
+| `APP_URL`                                                               | The site's public address, if it should not be the project's production domain.                                                                                                                        |
+| `HOSTED_MODE`                                                           | `1` runs PACTORA as a public service under its own name. See [Hosted mode](#hosted-mode).                                                                                                              |
+| `RESEND_REGION`                                                         | Where Resend sends from when the app adds your domain, for example `eu-west-1`. See [Running in the EU](#running-in-the-eu).                                                                           |
+| `SEAL_P12_BASE64`, `SEAL_P12_PASSWORD`                                  | Seal finished PDFs with a certificate from a certificate authority instead of the install's own. See [Signed PDFs and the seal](#signed-pdfs-and-the-seal).                                            |
+| `SEAL_TIMESTAMP_URL`                                                    | An RFC 3161 timestamp server that adds a trusted time to each seal, and long-term validation. See [Long-term validation](#long-term-validation).                                                       |
+| `MAX_SIGNERS_PER_ENVELOPE`                                              | The most signers one envelope can have, from 1 to 100. 25 when unset. See [Signing order](signing-order.md).                                                                                           |
+| `EIDEASY_CLIENT_ID`, `EIDEASY_SECRET`                                   | Let senders ask for advanced or qualified signatures in the signers' own names, through eID Easy. See [Signatures in the signers' own names](#signatures-in-the-signers-own-names-eidas-ades-and-qes). |
+| `CSC_API_URL`, `CSC_CLIENT_ID`, `CSC_CLIENT_SECRET`                     | The same through a trust service provider's remote signing service (CSC API v2). See [Signatures in the signers' own names](#signatures-in-the-signers-own-names-eidas-ades-and-qes).                  |
+| `BACKUP_BLOB_READ_WRITE_TOKEN`, `BACKUP_KEEP_DAYS`                      | A daily backup of the database and files to a second Blob store. See [Backup and restore](backup-and-restore.md).                                                                                      |
+| `AUDIT_LOG`                                                             | `off` keeps audit rows out of the function logs. See [Send the audit trail to your SIEM](#send-the-audit-trail-to-your-siem).                                                                          |
+| `SSO_ISSUER`, `SSO_CLIENT_ID`, `SSO_CLIENT_SECRET`                      | Sign in through your organization's identity provider (Okta, Entra ID, Google Workspace). `PASSWORD_SIGN_IN=off` then turns passwords off. See [Single sign-on](#single-sign-on).                      |
 
 ## Set the site up
 
-The first time you open a new install it takes you to `/setup`. There you name your organization, give its support address, and create the first account, which becomes the administrator. After that the setup page is gone for good.
+The owner's account is created at `/signup` (or with `npm run owner:provision`, see [Lock down a new install](#lock-down-a-new-install)) and lands straight in the workspace. Nothing else is asked for: no support address, sending domain or email provider. A dismissible Getting Started list on the dashboard offers the optional steps (name the workspace, add branding, connect email, create a first document, invite the team), all of them under Settings.
 
-- **Support address.** Setup does not finish without one. It is the address signers and people with an account are told to write to, and where replies to the site's emails go. It is saved in your install's own settings and nowhere else; there is no PACTORA address that it falls back to. The administrator can change it under Settings, Organization, but not remove it.
+- **Support address.** Optional. Add it under Settings, Workspace. It is where signers and account holders are told to write, and it is printed in email footers when set.
 
 - **Who can sign up.** The install starts by letting people with an email address at the administrator's own domain create accounts (or nobody else, if the administrator used a public mailbox such as Gmail). The administrator can change this under Settings, Organization: people at listed domains, nobody, or anyone. People who are only sent a document to sign never need an account.
 - **More administrators.** Settings, Organization lists everyone with an account under People, where an administrator can make someone else an administrator or take that away. There is always at least one. When an account is closed, its finished documents and their audit trails move to the longest-standing administrator, because they are the organization's records. If that person later stops being an administrator, those documents move on to one who stays, and the documents they sent themselves stay with them.
 - **What signers agree to before signing.** Before a signer can sign, they read a disclosure about using electronic records and signatures and tick a box to agree. The built-in disclosure says they may sign on paper instead, ask for a paper copy, and withdraw. Under Settings, Organization, "What signers agree to before signing", an administrator can write their own words in its place, or start from the standard text and change it. Separate paragraphs with a blank line, start a line with `## ` to make a heading, and write `{sender}` and `{contact}` where the sender's name and the address to write to go. Leave it empty to use the built-in text. A custom text is limited to 6,000 characters, and a heading needs words under it. Each signer's agreement records a version of the words they saw: the built-in text keeps its dated version, and a custom text is named by a fingerprint of the text, so the version changes whenever the text does. The words themselves, filled in as the signer read them, are kept in that signer's audit trail, so the record stays complete if the setting is changed later. Saving words of your own first shows a notice: the standard text covers what the U.S. E-SIGN Act requires before a consumer agrees to sign electronically (choosing paper, getting a paper copy, withdrawing and what that means, and the device and software needed), and removing or changing it may make signatures and records invalid. Saving needs an administrator to press "I agree", and each change to the setting is in the site audit trail with the version of the notice they agreed to. Saving the standard text unchanged, or going back to it, needs no notice. The consent step itself cannot be turned off. The hosted service always shows the built-in text. PACTORA is not legal advice, and that includes the standard text: check any wording with your own legal counsel before you rely on it.
-- **Email.** Settings, Organization also shows whether email is working. While no sender address is set, mail goes out from Resend's test address, which only reaches the owner of the Resend account. Enter a sender address at your domain and the page shows the DNS records to add and checks them for you. Mail from that address is not delivered until its domain is verified.
-- **`SETUP_TOKEN`.** A new install can be claimed by whoever opens it first. If its URL will be public before you get to it, set `SETUP_TOKEN` to a secret of your own and the setup page will ask for it.
-- **An install from before this page existed** has accounts but no administrator. Set `SETUP_TOKEN`, sign in with the account that should be in charge, and open `/setup`. It asks for a support address if the install has none. Sign-up stays open, as it was, until that administrator changes it.
+- **Email.** Settings, Email & Integrations connects the mailboxes agreements are sent from: Gmail and Google Workspace or Microsoft 365 and Outlook.com through their own sign-in (OAuth, send permission only), Zoho, Yahoo and iCloud Mail with an app password, any other provider over SMTP, or Resend. No new domain or DNS change is needed for an ordinary mailbox. Resend's sending-domain and DNS detail sits under Advanced Administration.
+- **Invitations.** Settings, Team & Permissions invites people by email. The link proves their address, so their account starts verified whatever the sign-up rule says. When email is not connected, copy the link and send it yourself.
+- **An install that has accounts but no administrator** is claimed with `npm run owner:provision -- --promote <email>`, which promotes an existing, verified account.
 
 ## Sign-in security
 
@@ -330,11 +343,7 @@ Sign-in, sign-up, password reset, the signing pages, uploads and sending are rat
 
 ## Bot protection
 
-The app can use [Vercel BotID](https://vercel.com/docs/botid), an invisible check that a request comes from a real browser, on the requests a script would go for: creating an account, signing in, asking for a password reset or verification email, the contact form and first-run setup.
-
-It is off by default. To turn it on, set `BOTID=1` on a Vercel deployment and redeploy; the setting is read when the app is built. BotID's basic check is free on every Vercel plan, and its deeper check is a paid option you switch on in the Vercel dashboard. It does nothing anywhere other than Vercel.
-
-It is opt-in for now because it has not yet been proven against a live Vercel deployment. If you turn it on, try signing in from a private window straight away, and remove `BOTID` and redeploy if that fails. A check that cannot reach Vercel lets the request through, so an outage on that side does not lock people out; the rate limits apply either way.
+Sign-in, sign-up, password reset, verification email, registration, invitations and the contact form are rate limited in Postgres, so the limits hold across every instance. Better Auth adds its own limits and a lockout after ten wrong passwords. Vercel BotID was removed in 1.1 because its package declares no licence; put Vercel Firewall or your own WAF in front for more.
 
 ## Hosted mode
 

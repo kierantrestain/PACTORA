@@ -48,7 +48,7 @@ Open [http://localhost:3000](http://localhost:3000).
 
 ### 5. Set the site up
 
-The first time you open the app it takes you to `/setup`, where you name the organization, give a support address and create the administrator. [Set the site up](self-hosting.md#set-the-site-up), in the self-hosting guide, explains each choice.
+The first time you open the app it takes you to `/signup`. The first account you create becomes the workspace owner and lands straight in the dashboard; nothing else is asked for. [Set the site up](self-hosting.md#set-the-site-up), in the self-hosting guide, explains the optional steps.
 
 ## Built with
 
