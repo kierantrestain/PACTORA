@@ -1,35 +1,34 @@
 "use client";
 
-import Link from "next/link";
-import {
-  useState,
-  type ChangeEvent,
-  type ChangeEventHandler,
-  type FormEvent,
-} from "react";
+import { useRouter } from "next/navigation";
+import { useState, type ChangeEvent, type FormEvent } from "react";
 
+import {
+  AuthCard,
+  AuthDivider,
+  AuthLink,
+  AuthNotice,
+  AuthTextButton,
+  PasswordField,
+  SubmitButton,
+  TextField,
+} from "@/components/auth/auth-ui";
+import {
+  hasOAuthProviders,
+  OAuthButtons,
+  type OAuthProviders,
+} from "@/components/auth/oauth-buttons";
 import { SsoButton, type SsoOption } from "@/components/auth/sso-button";
-import { FieldShell, ShellButton } from "@/components/shared/form-shell";
 import { authClient } from "@/lib/auth/client";
+import type { RegistrationView } from "@/lib/owner-provisioning";
 import {
   describePasswordRefusal,
   newPasswordLengthError,
-  PASSWORD_TOO_SHORT_MESSAGE,
+  PASSWORD_MIN_LENGTH,
 } from "@/lib/password-messages";
 import { signUpSchema } from "@/lib/schemas/auth";
 
-const defaultSuccessMessage = "Check your email to verify your sender account.";
-// With no email provider connected, the verification email cannot be sent.
-// Logging in sends it again, so that works once email is set up.
-const SIGNUP_EMAIL_NOT_CONNECTED_MESSAGE =
-  "Your account is created, but this site can't send email yet, so the email that verifies your address couldn't be sent. Ask an administrator to finish email setup in Settings, Organization. Once it's set up, log in and the verification email will be sent.";
-
-type AuthErrorLike = {
-  code?: string;
-  message?: string;
-};
-
-// Codes the server answers with when this install's sign-up rule turns an
+// Codes Better Auth answers with when this workspace's sign-up rule turns an
 // address away. The message that comes with them says what the rule is.
 const SIGNUP_RULE_ERROR_CODES = new Set([
   "setup_required",
@@ -37,451 +36,480 @@ const SIGNUP_RULE_ERROR_CODES = new Set([
   "signup_domain_not_allowed",
 ]);
 
+const GENERIC_ERROR = "Something went wrong. Please try again.";
+
 type SignupShellProps = {
-  /** False when the install has no email provider to send with. */
+  /** False when this deployment cannot send the confirmation email. */
   emailConnected?: boolean;
-  /** False when password sign-in is turned off, so accounts come from SSO. */
+  oauthProviders?: OAuthProviders | null;
+  /** False when password sign-in is off, so accounts come from SSO. */
   passwordSignIn?: boolean;
-  /** Single sign-on, when the install has it (lib/auth/sso.ts). */
+  registration: RegistrationView;
   sso?: SsoOption | null;
-  /** False when this install is not taking new accounts at all. */
-  signupAvailable?: boolean;
-  /** One sentence on who can create an account, or null when anyone can. */
-  signupRule?: string | null;
 };
 
-type SignupFormValues = {
-  email: string;
-  fullName: string;
-  password: string;
-};
-
-type SignupFormErrors = Partial<Record<keyof SignupFormValues, string>>;
-
-function createSignupFormValues(): SignupFormValues {
-  return {
-    email: "",
-    fullName: "",
-    password: "",
-  };
-}
-
-function trimFormValues(values: SignupFormValues): SignupFormValues {
-  return {
-    email: values.email.trim(),
-    fullName: values.fullName.trim(),
-    password: values.password,
-  };
-}
-
-function normalizeAuthErrorMessage(
-  error: AuthErrorLike | null | undefined,
-): string {
-  return error?.message?.trim().toLowerCase() ?? "";
-}
-
-type SignupFormCardProps = {
-  bannerMessage: string | null;
-  errors: SignupFormErrors;
-  formLocked: boolean;
-  isResendingVerification?: boolean;
-  isSubmitting: boolean;
-  onEmailChange: ChangeEventHandler<HTMLInputElement>;
-  onFullNameChange: ChangeEventHandler<HTMLInputElement>;
-  onPasswordChange: ChangeEventHandler<HTMLInputElement>;
-  onResendVerification?: () => void | Promise<void>;
-  onSsoError: (message: string) => void;
-  onSubmit: (event: FormEvent<HTMLFormElement>) => void | Promise<void>;
-  passwordSignIn: boolean;
-  showSuccess: boolean;
-  signupRule: string | null;
-  sso: SsoOption | null;
-  successMessage: string | null;
-  values: SignupFormValues;
-};
-
-function SignupFormCard({
-  bannerMessage,
-  errors,
-  formLocked,
-  isResendingVerification = false,
-  isSubmitting,
-  onEmailChange,
-  onFullNameChange,
-  onPasswordChange,
-  onResendVerification,
-  onSsoError,
-  onSubmit,
-  passwordSignIn,
-  showSuccess,
-  signupRule,
-  sso,
-  successMessage,
-  values,
-}: SignupFormCardProps) {
-  return (
-    <section className="panel w-full max-w-[460px] p-8 sm:p-10">
-      <div className="space-y-7">
-        <div className="space-y-2">
-          <p className="section-eyebrow">Create account</p>
-          <h1 className="text-[clamp(1.875rem,4.5vw,2.375rem)] font-extrabold leading-[1.08] tracking-[-0.035em] text-(--fg)">
-            Create your account
-          </h1>
-          {signupRule ? (
-            <p className="pt-1 text-sm leading-6 text-muted-foreground">
-              {signupRule}
-            </p>
-          ) : null}
-        </div>
-
-        {bannerMessage ? (
-          <p className="notice notice-danger" role="alert">
-            {bannerMessage}
-          </p>
-        ) : null}
-
-        {showSuccess ? (
-          <div aria-live="polite" className="notice notice-success">
-            <p>{successMessage ?? defaultSuccessMessage}</p>
-          </div>
-        ) : null}
-
-        {sso ? (
-          <SsoButton
-            onError={onSsoError}
-            sso={sso}
-            variant={passwordSignIn ? "secondary" : "primary"}
-          />
-        ) : null}
-
-        {sso && passwordSignIn ? (
-          <p className="text-center text-xs font-semibold uppercase tracking-[0.12em] text-(--secondary)">
-            or
-          </p>
-        ) : null}
-
-        {passwordSignIn ? (
-          <form className="space-y-5" noValidate onSubmit={onSubmit}>
-            <FieldShell
-              autoComplete="name"
-              disabled={formLocked}
-              error={errors.fullName}
-              label="Full name"
-              name="signup-full-name"
-              onChange={onFullNameChange}
-              placeholder="Jane Smith"
-              readOnly={formLocked}
-              value={values.fullName}
-            />
-            <FieldShell
-              autoComplete="email"
-              disabled={formLocked}
-              error={errors.email}
-              label="Email"
-              name="signup-email"
-              onChange={onEmailChange}
-              placeholder="jane@acmecorp.com"
-              readOnly={formLocked}
-              type="email"
-              value={values.email}
-            />
-            <FieldShell
-              autoComplete="new-password"
-              disabled={formLocked}
-              error={errors.password}
-              helper="Must be at least 15 characters"
-              label="Password"
-              name="signup-password"
-              onChange={onPasswordChange}
-              placeholder="Enter a password"
-              readOnly={formLocked}
-              type="password"
-              value={values.password}
-            />
-
-            {showSuccess ? (
-              <div className="flex flex-col gap-3">
-                <ShellButton className="w-full" href="/login" variant="primary">
-                  Go to log in
-                </ShellButton>
-                {onResendVerification ? (
-                  <ShellButton
-                    className="w-full"
-                    disabled={formLocked}
-                    loading={isResendingVerification}
-                    onClick={onResendVerification}
-                    type="button"
-                    variant="secondary"
-                  >
-                    {isResendingVerification
-                      ? "Sending..."
-                      : "Resend verification email"}
-                  </ShellButton>
-                ) : null}
-              </div>
-            ) : (
-              <ShellButton
-                className="w-full"
-                disabled={formLocked}
-                loading={isSubmitting}
-                type="submit"
-                variant="primary"
-              >
-                {isSubmitting ? "Creating account..." : "Sign up"}
-              </ShellButton>
-            )}
-          </form>
-        ) : null}
-
-        <div className="border-t border-(--border) pt-5 text-sm text-(--secondary)">
-          Already have an account?{" "}
-          <Link
-            className="font-bold text-(--accent-ink) underline-offset-4 hover:underline"
-            href="/login"
-          >
-            Log in
-          </Link>
-        </div>
-      </div>
-    </section>
-  );
-}
+type Values = { email: string; name: string; password: string };
+type Errors = Partial<Record<keyof Values, string>>;
 
 export function SignupShell({
   emailConnected = true,
+  oauthProviders = null,
   passwordSignIn = true,
-  signupAvailable = true,
-  signupRule = null,
+  registration,
   sso = null,
 }: SignupShellProps) {
-  if (!signupAvailable) {
-    return <SignupClosedCard />;
-  }
-
-  return (
-    <LiveSignupShell
-      emailConnected={emailConnected}
-      passwordSignIn={passwordSignIn || !sso}
-      signupRule={signupRule}
-      sso={sso}
-    />
-  );
-}
-
-function SignupClosedCard() {
-  return (
-    <section className="panel w-full max-w-[460px] p-8 sm:p-10">
-      <div className="space-y-7">
-        <div className="space-y-2">
-          <p className="section-eyebrow">Create account</p>
-          <h1 className="text-[clamp(1.875rem,4.5vw,2.375rem)] font-extrabold leading-[1.08] tracking-[-0.035em] text-(--fg)">
-            Sign-up is closed
-          </h1>
-          <p className="pt-1 text-sm leading-6 text-muted-foreground">
-            New accounts are not being accepted on this site. If you were sent a
-            document to sign, use the link in that email. You do not need an
-            account.
+  switch (registration.view) {
+    case "invitation-only":
+      return (
+        <AuthCard
+          description="New accounts are by invitation. Ask your workspace administrator to invite you, then open the link in your email."
+          footer={
+            <p>
+              Already have an account? <AuthLink href="/login">Sign in</AuthLink>
+            </p>
+          }
+          title="This workspace is invitation-only"
+        >
+          <p className="text-sm leading-6 text-(--secondary)">
+            Were you sent a document to sign? Use the link in that email. You
+            don&apos;t need an account.
           </p>
-        </div>
-        <ShellButton className="w-full" href="/login" variant="primary">
-          Go to log in
-        </ShellButton>
-      </div>
-    </section>
-  );
+        </AuthCard>
+      );
+    case "provisioning-required":
+      return (
+        <AuthCard
+          description="This deployment's owner account is created by the person who operates it, not from this page."
+          footer={
+            <p>
+              Already have an account? <AuthLink href="/login">Sign in</AuthLink>
+            </p>
+          }
+          title="Owner account not set up yet"
+        >
+          <p className="text-sm leading-6 text-(--secondary)">
+            If you run this deployment, provision the owner account as
+            described in the self-hosting guide, then sign in here.
+          </p>
+        </AuthCard>
+      );
+    case "unavailable":
+      return (
+        <AuthCard
+          description={
+            registration.reason === "unmigrated"
+              ? "This deployment's database needs its latest updates before accounts can be created."
+              : "This deployment isn't connected to a database yet, so accounts can't be created."
+          }
+          title="Sign-up is unavailable"
+        >
+          <p className="text-sm leading-6 text-(--secondary)">
+            Please try again later, or contact the person who runs this
+            deployment.
+          </p>
+        </AuthCard>
+      );
+    case "first-owner":
+    case "standard":
+      return (
+        <SignupForm
+          emailConnected={emailConnected}
+          firstOwner={registration.view === "first-owner"}
+          oauthProviders={oauthProviders}
+          passwordSignIn={passwordSignIn || !sso}
+          signupRule={
+            registration.view === "standard" ? registration.signupRule : null
+          }
+          sso={sso}
+        />
+      );
+  }
 }
 
-function LiveSignupShell({
+function SignupForm({
   emailConnected,
+  firstOwner: initiallyFirstOwner,
+  oauthProviders,
   passwordSignIn,
   signupRule,
   sso,
 }: {
   emailConnected: boolean;
+  firstOwner: boolean;
+  oauthProviders: OAuthProviders | null;
   passwordSignIn: boolean;
   signupRule: string | null;
   sso: SsoOption | null;
 }) {
-  const [values, setValues] = useState<SignupFormValues>(
-    createSignupFormValues(),
-  );
-  const [errors, setErrors] = useState<SignupFormErrors>({});
-  const [bannerMessage, setBannerMessage] = useState<string | null>(null);
-  const [isSubmitting, setIsSubmitting] = useState(false);
-  const [isResendingVerification, setIsResendingVerification] = useState(false);
-  const [showSuccess, setShowSuccess] = useState(false);
-  const [successEmail, setSuccessEmail] = useState<string | null>(null);
-  const [successMessage, setSuccessMessage] = useState<string | null>(null);
+  const router = useRouter();
+  const [firstOwner, setFirstOwner] = useState(initiallyFirstOwner);
+  const [values, setValues] = useState<Values>({
+    email: "",
+    name: "",
+    password: "",
+  });
+  const [errors, setErrors] = useState<Errors>({});
+  const [banner, setBanner] = useState<string | null>(null);
+  const [busy, setBusy] = useState(false);
+  const [sentTo, setSentTo] = useState<string | null>(null);
+  const [blocked, setBlocked] = useState<"provisioning" | null>(null);
 
-  function handleChange(field: keyof SignupFormValues) {
+  function update(field: keyof Values) {
     return (event: ChangeEvent<HTMLInputElement>) => {
-      const nextValue = event.target.value;
+      const next = event.target.value;
 
-      setValues((currentValues) => ({
-        ...currentValues,
-        [field]: nextValue,
-      }));
-
-      setErrors((currentErrors) => ({
-        ...currentErrors,
-        [field]: undefined,
-      }));
-      setBannerMessage(null);
-      setShowSuccess(false);
-      setSuccessMessage(null);
+      setValues((current) => ({ ...current, [field]: next }));
+      setErrors((current) => ({ ...current, [field]: undefined }));
+      setBanner(null);
     };
   }
 
-  async function handleResendVerification() {
-    if (!successEmail || isResendingVerification) {
+  function validate(input: Values): Errors {
+    const result = signUpSchema.safeParse({
+      email: input.email,
+      fullName: input.name,
+      password: input.password,
+    });
+    const next: Errors = {};
+
+    if (result.success) {
+      return next;
+    }
+
+    for (const issue of result.error.issues) {
+      const field = issue.path[0];
+
+      if (field === "fullName") next.name = "Enter your full name";
+      if (field === "email") next.email = "Enter a valid email address";
+      if (field === "password") {
+        next.password =
+          newPasswordLengthError(input.password) ??
+          `Use at least ${PASSWORD_MIN_LENGTH} characters`;
+      }
+    }
+
+    return next;
+  }
+
+  async function registerFirstOwner(input: Values): Promise<"done" | "fall"> {
+    let response: Response;
+
+    try {
+      response = await fetch("/api/register", {
+        body: JSON.stringify({
+          email: input.email,
+          name: input.name,
+          password: input.password,
+        }),
+        headers: { "content-type": "application/json" },
+        method: "POST",
+      });
+    } catch {
+      setBanner(GENERIC_ERROR);
+      return "done";
+    }
+
+    const payload = (await response.json().catch(() => null)) as {
+      code?: string;
+      error?: string;
+      fieldErrors?: Partial<Record<string, string>>;
+      message?: string;
+      redirectTo?: string;
+    } | null;
+
+    if (response.status === 201) {
+      router.replace(payload?.redirectTo ?? "/dashboard");
+      router.refresh();
+      return "done";
+    }
+
+    // Someone else became the owner first: carry on as an ordinary sign-up.
+    if (response.status === 409 && payload?.code === "owner_exists") {
+      setFirstOwner(false);
+      return "fall";
+    }
+
+    if (payload?.code === "provisioning_required") {
+      setBlocked("provisioning");
+      return "done";
+    }
+
+    const passwordProblem = describePasswordRefusal({
+      code: payload?.code,
+      message: payload?.message ?? payload?.error,
+    });
+
+    if (passwordProblem) {
+      setErrors({ password: passwordProblem });
+    } else if (payload?.fieldErrors) {
+      setErrors({
+        email: payload.fieldErrors.email,
+        name: payload.fieldErrors.name,
+        password: payload.fieldErrors.password,
+      });
+    } else {
+      setBanner(payload?.error ?? payload?.message ?? GENERIC_ERROR);
+    }
+
+    return "done";
+  }
+
+  async function signUpStandard(input: Values) {
+    const result = await authClient.signUp.email({
+      callbackURL: `${window.location.origin}/verify-email`,
+      email: input.email,
+      name: input.name,
+      password: input.password,
+    });
+
+    if (!result.error) {
+      setSentTo(input.email);
       return;
     }
 
-    setBannerMessage(null);
-    setIsResendingVerification(true);
+    const message = result.error.message?.toLowerCase() ?? "";
 
-    try {
-      const response = await fetch("/api/auth/send-verification-email", {
-        body: JSON.stringify({
-          callbackURL: `${window.location.origin}/dashboard`,
-          email: successEmail,
-        }),
-        headers: {
-          "content-type": "application/json",
-        },
-        method: "POST",
-      });
-
-      if (!response.ok) {
-        setBannerMessage("We couldn't resend the verification email.");
-        return;
-      }
-
-      setSuccessMessage("Verification email sent. Check your inbox.");
-    } catch {
-      setBannerMessage("We couldn't resend the verification email.");
-    } finally {
-      setIsResendingVerification(false);
+    if (SIGNUP_RULE_ERROR_CODES.has(result.error.code ?? "")) {
+      setBanner(result.error.message ?? "New accounts aren't being accepted.");
+    } else if (
+      message.includes("user already exists") ||
+      message.includes("use another email")
+    ) {
+      setErrors({ email: "This email is already registered" });
+    } else if (describePasswordRefusal(result.error)) {
+      setErrors({ password: describePasswordRefusal(result.error)! });
+    } else {
+      setBanner(GENERIC_ERROR);
     }
   }
 
   async function handleSubmit(event: FormEvent<HTMLFormElement>) {
     event.preventDefault();
 
-    if (isSubmitting || isResendingVerification) {
+    if (busy) {
       return;
     }
 
-    const formData = new FormData(event.currentTarget);
-    const trimmedValues = trimFormValues({
-      email: String(formData.get("signup-email") ?? values.email),
-      fullName: String(formData.get("signup-full-name") ?? values.fullName),
-      password: String(formData.get("signup-password") ?? values.password),
-    });
-    const validationResult = signUpSchema.safeParse(trimmedValues);
+    const input: Values = {
+      email: values.email.trim(),
+      name: values.name.trim(),
+      password: values.password,
+    };
+    const nextErrors = validate(input);
 
-    if (!validationResult.success) {
-      const nextErrors: SignupFormErrors = {};
+    setValues(input);
+    setErrors(nextErrors);
+    setBanner(null);
 
-      for (const issue of validationResult.error.issues) {
-        const field = issue.path[0];
+    if (Object.keys(nextErrors).length > 0) {
+      return;
+    }
 
-        if (field === "email") {
-          nextErrors.email = "Enter a valid email address";
-        }
+    setBusy(true);
 
-        if (field === "fullName") {
-          nextErrors.fullName = "Enter your full name";
-        }
-
-        if (field === "password") {
-          nextErrors.password =
-            newPasswordLengthError(trimmedValues.password) ??
-            PASSWORD_TOO_SHORT_MESSAGE;
-        }
+    try {
+      if (firstOwner && (await registerFirstOwner(input)) === "done") {
+        return;
       }
 
-      setValues(trimmedValues);
-      setErrors(nextErrors);
-      setBannerMessage(null);
-      setShowSuccess(false);
-      setSuccessMessage(null);
-      return;
+      await signUpStandard(input);
+    } catch {
+      setBanner(GENERIC_ERROR);
+    } finally {
+      setBusy(false);
     }
+  }
 
-    setValues(validationResult.data);
-    setErrors({});
-    setBannerMessage(null);
-    setShowSuccess(false);
-    setSuccessMessage(null);
-    setIsSubmitting(true);
-
-    const result = await authClient.signUp.email({
-      callbackURL: `${window.location.origin}/dashboard`,
-      email: validationResult.data.email,
-      name: validationResult.data.fullName,
-      password: validationResult.data.password,
-    });
-
-    if (result.error) {
-      const normalizedErrorMessage = normalizeAuthErrorMessage(result.error);
-
-      if (SIGNUP_RULE_ERROR_CODES.has(result.error.code ?? "")) {
-        setBannerMessage(
-          result.error.message ?? "New accounts are not being accepted.",
-        );
-      } else if (
-        normalizedErrorMessage.includes("user already exists") ||
-        normalizedErrorMessage.includes("use another email")
-      ) {
-        setErrors({
-          email: "This email is already registered",
-        });
-      } else if (describePasswordRefusal(result.error)) {
-        setErrors({
-          password: describePasswordRefusal(result.error)!,
-        });
-      } else {
-        setBannerMessage("Something went wrong. Please try again.");
-      }
-
-      setIsSubmitting(false);
-      return;
-    }
-
-    setSuccessEmail(validationResult.data.email);
-    // With no email provider the confirmation email cannot have gone, so
-    // the sender is not told to wait for it (issue #95).
-    setSuccessMessage(
-      emailConnected
-        ? defaultSuccessMessage
-        : SIGNUP_EMAIL_NOT_CONNECTED_MESSAGE,
+  if (blocked === "provisioning") {
+    return (
+      <SignupShell registration={{ view: "provisioning-required" }} />
     );
-    setShowSuccess(true);
-    setIsSubmitting(false);
+  }
+
+  if (sentTo) {
+    return (
+      <CheckInbox
+        email={sentTo}
+        emailConnected={emailConnected}
+        onStartOver={() => {
+          setSentTo(null);
+          setValues((current) => ({ ...current, password: "" }));
+        }}
+      />
+    );
+  }
+
+  const showOAuth = !firstOwner && hasOAuthProviders(oauthProviders);
+  const showSso = !firstOwner && sso !== null;
+
+  return (
+    <AuthCard
+      description={
+        firstOwner
+          ? "You're the first one here, so this account will own the workspace."
+          : (signupRule ?? undefined)
+      }
+      footer={
+        <p>
+          Already have an account? <AuthLink href="/login">Sign in</AuthLink>
+        </p>
+      }
+      title={firstOwner ? "Create your workspace" : "Create your account"}
+    >
+      {banner ? <AuthNotice>{banner}</AuthNotice> : null}
+
+      {showSso ? (
+        <SsoButton
+          onError={setBanner}
+          sso={sso}
+          variant={passwordSignIn ? "secondary" : "primary"}
+        />
+      ) : null}
+
+      {showOAuth ? (
+        <OAuthButtons
+          disabled={busy}
+          onError={setBanner}
+          providers={oauthProviders}
+        />
+      ) : null}
+
+      {(showSso || showOAuth) && passwordSignIn ? <AuthDivider /> : null}
+
+      {passwordSignIn || firstOwner ? (
+        <form className="space-y-5" noValidate onSubmit={handleSubmit}>
+          <TextField
+            autoComplete="name"
+            disabled={busy}
+            error={errors.name}
+            label="Full name"
+            name="name"
+            onChange={update("name")}
+            value={values.name}
+          />
+          <TextField
+            autoComplete="email"
+            disabled={busy}
+            error={errors.email}
+            inputMode="email"
+            label="Email address"
+            name="email"
+            onChange={update("email")}
+            type="email"
+            value={values.email}
+          />
+          <PasswordField
+            autoComplete="new-password"
+            disabled={busy}
+            error={errors.password}
+            hint={`At least ${PASSWORD_MIN_LENGTH} characters. A passphrase works well.`}
+            onChange={update("password")}
+            value={values.password}
+          />
+          <SubmitButton busy={busy} busyLabel="Creating account…">
+            Create account
+          </SubmitButton>
+        </form>
+      ) : null}
+    </AuthCard>
+  );
+}
+
+function CheckInbox({
+  email,
+  emailConnected,
+  onStartOver,
+}: {
+  email: string;
+  emailConnected: boolean;
+  onStartOver: () => void;
+}) {
+  const [state, setState] = useState<"idle" | "sending" | "sent" | "failed">(
+    "idle",
+  );
+
+  async function resend() {
+    if (state === "sending") {
+      return;
+    }
+
+    setState("sending");
+
+    try {
+      const response = await fetch("/api/auth/send-verification-email", {
+        body: JSON.stringify({
+          callbackURL: `${window.location.origin}/verify-email`,
+          email,
+        }),
+        headers: { "content-type": "application/json" },
+        method: "POST",
+      });
+
+      setState(response.ok ? "sent" : "failed");
+    } catch {
+      setState("failed");
+    }
+  }
+
+  if (!emailConnected) {
+    return (
+      <AuthCard
+        description="Your account is ready, but this workspace can't send email yet, so the confirmation link couldn't be sent."
+        footer={
+          <p>
+            <AuthLink href="/login">Back to sign in</AuthLink>
+          </p>
+        }
+        title="Almost there"
+      >
+        <p className="text-sm leading-6 text-(--secondary)">
+          Ask your workspace administrator to connect email. Once they have,
+          sign in and a new confirmation link is sent to{" "}
+          <strong className="text-(--fg)">{email}</strong>.
+        </p>
+      </AuthCard>
+    );
   }
 
   return (
-    <SignupFormCard
-      bannerMessage={bannerMessage}
-      errors={errors}
-      formLocked={isSubmitting || isResendingVerification}
-      isResendingVerification={isResendingVerification}
-      isSubmitting={isSubmitting}
-      onEmailChange={handleChange("email")}
-      onFullNameChange={handleChange("fullName")}
-      onPasswordChange={handleChange("password")}
-      onResendVerification={
-        emailConnected ? handleResendVerification : undefined
+    <AuthCard
+      description={
+        <>
+          We sent a confirmation link to{" "}
+          <strong className="font-bold text-(--fg)">{email}</strong>. Open it to
+          finish creating your account.
+        </>
       }
-      onSsoError={setBannerMessage}
-      onSubmit={handleSubmit}
-      passwordSignIn={passwordSignIn}
-      showSuccess={showSuccess}
-      signupRule={signupRule}
-      sso={sso}
-      successMessage={successMessage}
-      values={values}
-    />
+      footer={
+        <p>
+          Confirmed already? <AuthLink href="/login">Sign in</AuthLink>
+        </p>
+      }
+      title="Check your inbox"
+    >
+      {state === "sent" ? (
+        <AuthNotice tone="success">A new link is on its way.</AuthNotice>
+      ) : null}
+      {state === "failed" ? (
+        <AuthNotice>We couldn&apos;t send another link. Try again.</AuthNotice>
+      ) : null}
+      <div className="flex flex-col gap-3 text-sm text-(--secondary)">
+        <p>
+          Nothing after a few minutes? Check your spam folder, or{" "}
+          <button
+            className="font-bold text-(--accent-ink) underline-offset-4 hover:underline disabled:opacity-50"
+            disabled={state === "sending"}
+            onClick={() => void resend()}
+            type="button"
+          >
+            {state === "sending" ? "sending…" : "send it again"}
+          </button>
+          .
+        </p>
+        <AuthTextButton onClick={onStartOver}>
+          Use a different email address
+        </AuthTextButton>
+      </div>
+    </AuthCard>
   );
 }

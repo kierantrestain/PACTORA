@@ -500,11 +500,11 @@ export function WebhooksPanel() {
   }
 
   return (
-    <div className="space-y-5 border-t border-(--border) pt-8">
+    <section className="panel scroll-mt-28 space-y-5 p-5 sm:p-7" id="webhooks">
       <div className="space-y-2">
-        <h3 className="text-lg font-extrabold tracking-[-0.02em] text-(--fg)">
+        <h2 className="text-lg font-extrabold tracking-[-0.02em] text-(--fg)">
           Webhooks
-        </h3>
+        </h2>
         <p className="max-w-2xl text-sm leading-6 text-(--secondary)">
           Tell another app when an envelope is sent, opened, signed, completed,
           declined, voided or expires. Each event is POSTed to the URL as JSON
@@ -782,6 +782,6 @@ export function WebhooksPanel() {
           ))}
         </ul>
       )}
-    </div>
+    </section>
   );
 }

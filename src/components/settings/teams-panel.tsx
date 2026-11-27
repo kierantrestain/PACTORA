@@ -146,11 +146,11 @@ export function TeamsPanel() {
   }
 
   return (
-    <div className="space-y-5 border-t border-(--border) pt-8">
+    <section className="panel scroll-mt-28 space-y-5 p-5 sm:p-7" id="teams">
       <div className="space-y-2">
-        <h3 className="text-lg font-extrabold tracking-[-0.02em] text-(--fg)">
+        <h2 className="text-lg font-extrabold tracking-[-0.02em] text-(--fg)">
           Teams
-        </h3>
+        </h2>
         <p className="max-w-2xl text-sm leading-6 text-(--secondary)">
           People on a team see the envelopes their teammates send: who has
           signed, the audit trail, and the signed PDF and certificate once it is
@@ -300,6 +300,6 @@ export function TeamsPanel() {
           ))}
         </ul>
       ) : null}
-    </div>
+    </section>
   );
 }

@@ -1,29 +1,50 @@
+import type { Metadata } from "next";
+import { redirect } from "next/navigation";
+
 import { LoginShell } from "@/components/auth/login-shell";
+import { getOAuthLoginProviders } from "@/lib/auth/oauth-providers";
 import { redirectIfSignedIn } from "@/lib/auth/server";
 import { readPasswordSignInPolicy, readSsoConfig } from "@/lib/auth/sso";
+import { redirectToSetupIfNeeded } from "@/lib/install";
+
+export const metadata: Metadata = { title: "Sign in" };
 
 type LoginPageProps = {
-  searchParams?: Promise<{
+  searchParams: Promise<{
     error?: string;
+    next?: string;
     token?: string;
   }>;
 };
 
 export default async function LoginPage({ searchParams }: LoginPageProps) {
-  const resolvedSearchParams = searchParams ? await searchParams : undefined;
+  const params = await searchParams;
 
-  // A link from a password reset email is for this page whoever is signed
-  // in, so it is shown as it is.
-  if (!resolvedSearchParams?.token && !resolvedSearchParams?.error) {
+  // Reset links sent before the reset page had its own address came back
+  // here with the token, or with the error for one that had expired.
+  if (params.token) {
+    redirect(`/reset-password?token=${encodeURIComponent(params.token)}`);
+  }
+
+  if (params.error === "INVALID_TOKEN") {
+    redirect("/reset-password?error=INVALID_TOKEN");
+  }
+
+  await redirectToSetupIfNeeded();
+
+  if (!params.error) {
     await redirectIfSignedIn();
   }
 
-  const error = resolvedSearchParams?.error ?? null;
   const sso = readSsoConfig();
   const passwordPolicy = readPasswordSignInPolicy();
 
   return (
     <LoginShell
+      // Anything else is a provider coming back without a session.
+      callbackError={params.error ? params.error.slice(0, 80) : null}
+      next={params.next ?? null}
+      oauthProviders={getOAuthLoginProviders()}
       passwordSignIn={
         passwordPolicy.enabled
           ? "on"
@@ -31,11 +52,7 @@ export default async function LoginPage({ searchParams }: LoginPageProps) {
             ? "fallback"
             : "off"
       }
-      resetError={error === "INVALID_TOKEN" ? error : null}
-      resetToken={resolvedSearchParams?.token ?? null}
       sso={sso ? { name: sso.name } : null}
-      // Anything else is single sign-on coming back without a session.
-      ssoError={error && error !== "INVALID_TOKEN" ? error.slice(0, 80) : null}
     />
   );
 }

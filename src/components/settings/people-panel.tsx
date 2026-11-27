@@ -250,11 +250,11 @@ export function PeoplePanel({ part11Mode = false }: { part11Mode?: boolean }) {
     list !== null && (searching || list.total >= SEARCH_FROM_TOTAL);
 
   return (
-    <div className="space-y-5 border-t border-(--border) pt-8">
+    <section className="panel scroll-mt-28 space-y-5 p-5 sm:p-7" id="people">
       <div className="space-y-2">
-        <h3 className="text-lg font-extrabold tracking-[-0.02em] text-(--fg)">
+        <h2 className="text-lg font-extrabold tracking-[-0.02em] text-(--fg)">
           People
-        </h3>
+        </h2>
         <p className="max-w-2xl text-sm leading-6 text-(--secondary)">
           Everyone with an account here. Administrators can change these
           settings, answer signer data requests and receive the finished
@@ -525,6 +525,6 @@ export function PeoplePanel({ part11Mode = false }: { part11Mode?: boolean }) {
           name or an email address above to find the others.
         </p>
       ) : null}
-    </div>
+    </section>
   );
 }

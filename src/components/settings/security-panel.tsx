@@ -345,11 +345,11 @@ export function SecurityPanel({
     limits.sessionMaxHours !== savedLimits.sessionMaxHours;
 
   return (
-    <div className="space-y-5 border-t border-(--border) pt-8" id="security">
+    <section className="panel scroll-mt-28 space-y-5 p-5 sm:p-7" id="security">
       <div className="space-y-2">
-        <h3 className="text-lg font-extrabold tracking-[-0.02em] text-(--fg)">
+        <h2 className="text-lg font-extrabold tracking-[-0.02em] text-(--fg)">
           Sign-in security
-        </h3>
+        </h2>
         <p className="max-w-2xl text-sm leading-6 text-(--secondary)">
           Two-step sign-in asks for a code from an authenticator app (such as
           1Password, Google Authenticator or Microsoft Authenticator) after the
@@ -390,7 +390,7 @@ export function SecurityPanel({
       </div>
 
       <div className="space-y-3">
-        <h4 className="text-[0.9375rem] font-bold text-(--fg)">Sessions</h4>
+        <h3 className="text-[0.9375rem] font-bold text-(--fg)">Sessions</h3>
         <p className="max-w-2xl text-sm leading-6 text-(--secondary)">
           How long someone stays signed in. A change applies to everyone who is
           signed in now, from their next click. Anyone can also sign out
@@ -473,9 +473,9 @@ export function SecurityPanel({
 
       <div className="space-y-3">
         <div className="flex flex-wrap items-center justify-between gap-3">
-          <h4 className="text-[0.9375rem] font-bold text-(--fg)">
+          <h3 className="text-[0.9375rem] font-bold text-(--fg)">
             Site audit trail
-          </h4>
+          </h3>
           <div className="flex flex-wrap gap-2">
             <button
               className="btn-quiet"
@@ -541,6 +541,6 @@ export function SecurityPanel({
           )
         ) : null}
       </div>
-    </div>
+    </section>
   );
 }

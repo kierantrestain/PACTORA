@@ -33,8 +33,10 @@ export async function getInstallMetadata(): Promise<Metadata> {
 
 /**
  * For the pages a first visitor can land on. While the install has no
- * accounts and has never been set up, they all lead to /setup. So does a
- * deployment with no database connected, where /setup explains what to do.
+ * accounts and has never been set up, they all lead to /signup, which
+ * offers to create the owner account (or says how the owner is provisioned
+ * on this deployment). So does a deployment with no database connected,
+ * where /signup says so. Never called from /signup itself.
  */
 export async function redirectToSetupIfNeeded() {
   let needsSetup: boolean;
@@ -54,6 +56,6 @@ export async function redirectToSetupIfNeeded() {
   }
 
   if (needsSetup) {
-    redirect("/setup");
+    redirect("/signup");
   }
 }

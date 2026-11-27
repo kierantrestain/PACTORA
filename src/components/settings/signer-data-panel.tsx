@@ -73,11 +73,11 @@ export function SignerDataPanel() {
   }
 
   return (
-    <div className="space-y-5 border-t border-(--border) pt-8">
+    <section className="panel scroll-mt-28 space-y-5 p-5 sm:p-7" id="signer-data">
       <div className="space-y-2">
-        <h3 className="text-lg font-extrabold tracking-[-0.02em] text-(--fg)">
+        <h2 className="text-lg font-extrabold tracking-[-0.02em] text-(--fg)">
           Signer data requests
-        </h3>
+        </h2>
         <p className="max-w-2xl text-sm leading-6 text-(--secondary)">
           When a signer asks what you hold about them, download it here. When
           they ask for it to be erased, you can delete every finished envelope
@@ -137,6 +137,6 @@ export function SignerDataPanel() {
           </p>
         ) : null}
       </div>
-    </div>
+    </section>
   );
 }

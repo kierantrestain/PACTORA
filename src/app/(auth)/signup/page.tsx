@@ -1,28 +1,27 @@
+import type { Metadata } from "next";
+
 import { SignupShell } from "@/components/auth/signup-shell";
+import { getOAuthLoginProviders } from "@/lib/auth/oauth-providers";
 import { redirectIfSignedIn } from "@/lib/auth/server";
 import { readPasswordSignInPolicy, readSsoConfig } from "@/lib/auth/sso";
-import { buildBranding } from "@/lib/branding";
+import { getRegistrationView } from "@/lib/owner-provisioning";
 import { canSendEmail } from "@/lib/services/email";
-import { getSettings } from "@/lib/settings";
-import { describeSignupPolicy } from "@/lib/signup-policy";
+
+export const metadata: Metadata = { title: "Create account" };
 
 export default async function SignupPage() {
   await redirectIfSignedIn();
 
-  const settings = await getSettings();
+  const registration = await getRegistrationView();
   const sso = readSsoConfig();
 
   return (
     <SignupShell
       emailConnected={canSendEmail()}
+      oauthProviders={getOAuthLoginProviders()}
       passwordSignIn={readPasswordSignInPolicy().enabled}
+      registration={registration}
       sso={sso ? { name: sso.name } : null}
-      signupAvailable={buildBranding(settings).signupAvailable}
-      // Says who can sign up before anyone fills the form in. Nothing to
-      // say when anyone can.
-      signupRule={
-        settings.signupMode === "open" ? null : describeSignupPolicy(settings)
-      }
     />
   );
 }

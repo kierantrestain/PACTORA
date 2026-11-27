@@ -22,13 +22,13 @@ function getAuthNavAction(pathname: string): AuthNavAction {
   if (pathname === "/signup") {
     return {
       href: "/login",
-      label: "Log in",
+      label: "Sign in",
     };
   }
 
   return {
     href: "/signup",
-    label: "Sign up",
+    label: "Create account",
   };
 }
 
@@ -37,7 +37,10 @@ export function AuthShell({ children }: AuthShellProps) {
   const { signupAvailable } = useBranding();
   const navAction = getAuthNavAction(pathname);
   // No "Sign up" link to a page that would only say sign-up is closed.
-  const showNavAction = navAction.href !== "/signup" || signupAvailable;
+  // An invitation already says how to join, so it gets no second offer.
+  const showNavAction =
+    !pathname.startsWith("/invite/") &&
+    (navAction.href !== "/signup" || signupAvailable);
 
   return (
     <div className="flex min-h-screen flex-col">

@@ -42,11 +42,11 @@ export function Part11Panel({ initialEnabled }: { initialEnabled: boolean }) {
   }
 
   return (
-    <div className="space-y-5 border-t border-(--border) pt-8" id="part11">
+    <section className="panel scroll-mt-28 space-y-5 p-5 sm:p-7" id="part11">
       <div className="space-y-2">
-        <h3 className="text-lg font-extrabold tracking-[-0.02em] text-(--fg)">
+        <h2 className="text-lg font-extrabold tracking-[-0.02em] text-(--fg)">
           FDA 21 CFR Part 11 mode
-        </h3>
+        </h2>
         <p className="max-w-2xl text-sm leading-6 text-(--secondary)">
           For regulated records. While it is on, envelopes are sent only to
           people with an account here whose identity an administrator has
@@ -88,6 +88,6 @@ export function Part11Panel({ initialEnabled }: { initialEnabled: boolean }) {
               : "Turn on Part 11 mode"}
         </button>
       </div>
-    </div>
+    </section>
   );
 }

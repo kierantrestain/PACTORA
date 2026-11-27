@@ -105,11 +105,11 @@ export function BrandingPanel({
   const busy = disabled || logoBusy !== null;
 
   return (
-    <div className="space-y-5 border-t border-(--border) pt-8">
+    <div className="space-y-5">
       <div className="space-y-2">
-        <h3 className="text-lg font-extrabold tracking-[-0.02em] text-(--fg)">
+        <h2 className="text-lg font-extrabold tracking-[-0.02em] text-(--fg)">
           Logo and color
-        </h3>
+        </h2>
         <p className="max-w-2xl text-sm leading-6 text-(--secondary)">
           Optional. Your logo goes in the header of this site, on the pages
           signers see and at the top of emails. Your color is used for buttons
