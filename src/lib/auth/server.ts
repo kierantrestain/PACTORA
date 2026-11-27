@@ -39,6 +39,12 @@ import {
   type EnvSource,
 } from "../utils/env.ts";
 import { escapeHtml } from "../utils/html.ts";
+import {
+  isOAuthEmailVerified,
+  OAUTH_EMAIL_NOT_VERIFIED_MESSAGE,
+  readGoogleLoginConfig,
+  readMicrosoftLoginConfig,
+} from "./oauth-providers.ts";
 import { isRunningSetup } from "./setup-context.ts";
 import { signInEvents } from "./sign-in-events.ts";
 import {
@@ -294,6 +300,8 @@ export function createAppAuth({
     return cachedEmailService;
   };
   const sso = readSsoConfig(env);
+  const googleLogin = readGoogleLoginConfig(env);
+  const microsoftLogin = readMicrosoftLoginConfig(env);
   const passwordPolicy = readPasswordSignInPolicy(env);
   const plugins = [
     // Single sign-on with the organization's identity provider (sso.ts).
@@ -519,6 +527,32 @@ export function createAppAuth({
     },
     plugins,
     secret,
+    // Sign-in with Google and Microsoft accounts, offered only when their
+    // client credentials are set (oauth-providers.ts). Identity scopes only:
+    // mailbox access is a separate grant made in Email & Integrations.
+    socialProviders: {
+      ...(googleLogin
+        ? {
+            google: {
+              clientId: googleLogin.clientId,
+              clientSecret: googleLogin.clientSecret,
+              prompt: "select_account" as const,
+              scope: ["openid", "email", "profile"],
+            },
+          }
+        : {}),
+      ...(microsoftLogin
+        ? {
+            microsoft: {
+              clientId: microsoftLogin.clientId,
+              clientSecret: microsoftLogin.clientSecret,
+              prompt: "select_account" as const,
+              scope: ["openid", "email", "profile"],
+              tenantId: microsoftLogin.tenantId,
+            },
+          }
+        : {}),
+    },
     user: {
       changeEmail: {
         enabled: true,
@@ -543,6 +577,22 @@ export function createAppAuth({
       // the account comes to be created, so the check in hooks.before above
       // is not the only thing standing in the way.
       validateUserInfo: async ({ source, user }) => {
+        // A Google or Microsoft account is only made into, or tied to, an
+        // account here when the provider vouches for its address.
+        if (
+          source.method === "oauth" &&
+          (source.oauth?.providerId === "google" ||
+            source.oauth?.providerId === "microsoft") &&
+          (source.action === "create-user" ||
+            source.action === "link-account") &&
+          !isOAuthEmailVerified(source.oauth.providerId, source.oauth.profile)
+        ) {
+          return {
+            error: "email_not_verified",
+            errorDescription: OAUTH_EMAIL_NOT_VERIFIED_MESSAGE,
+          };
+        }
+
         if (source.action !== "create-user" || isRunningSetup()) {
           return;
         }

@@ -13,6 +13,10 @@ import {
   type SettingsUpdate,
   type SetupState,
 } from "./settings.ts";
+import {
+  allowsTokenFreeFirstOwner,
+  readOwnerProvisioningToken,
+} from "./owner-provisioning.ts";
 import { suggestSignupPolicy } from "./signup-policy.ts";
 import { getEnv, isHostedMode, type EnvSource } from "./utils/env.ts";
 
@@ -28,15 +32,16 @@ import { getEnv, isHostedMode, type EnvSource } from "./utils/env.ts";
 // administrator, and SETUP_TOKEN is required: without it, any account
 // holder could promote themselves.
 //
-// Either way, setup does not finish without a support address, the one
-// signers and account holders are told to write to, unless SUPPORT_EMAIL
-// already sets it for the deployment. It is saved in this install's own
-// settings, and nothing stands in for it: any address written into the
-// code would belong to somebody else.
+// Since 1.1 a support address and an organization name are optional: they
+// can be added later under Settings, Workspace, and nothing else stands in
+// for them (any address written into the code would belong to somebody
+// else). Who may run setup without SETUP_TOKEN is decided by
+// owner-provisioning.ts, which waives the token only where every request
+// already passes an access gate.
 
 // Held for the length of the setup transaction, so two visitors cannot both
 // become the first administrator.
-const SETUP_ADVISORY_LOCK_ID = 746108322;
+export const SETUP_ADVISORY_LOCK_ID = 746108322;
 
 export type SetupFieldName =
   | "email"
@@ -102,6 +107,13 @@ type CompleteSetupOptions = {
    */
   createAdminAccount: CreateAdminAccount;
   database?: DbPool;
+  /**
+   * "waived" skips SETUP_TOKEN for a new install. Only the token-free
+   * first-owner registration passes it, and only after
+   * resolveOwnerProvisioning has found the deployment access-protected.
+   * Claiming an install that already has accounts always needs the token.
+   */
+  setupToken?: "required-when-set" | "waived";
   env?: EnvSource;
   sessionUser?: SetupSessionUser | null;
 };
@@ -118,7 +130,13 @@ const optionalEmailSchema = z.preprocess(
 );
 
 const baseSetupSchema = z.object({
-  organizationName: organizationNameSchema,
+  organizationName: z.preprocess(
+    (value) =>
+      typeof value === "string" && value.trim().length === 0
+        ? undefined
+        : value,
+    organizationNameSchema.optional(),
+  ),
   senderAddress: optionalEmailSchema,
   setupToken: z.string().max(512).optional(),
   // Whether one is needed depends on what is saved already, which is only
@@ -210,9 +228,11 @@ function needsSupportAddress(
   storedSupportAddress: string | null,
   env: EnvSource,
 ): boolean {
-  return (
-    getEnv(env).email.supportAddress === undefined && !storedSupportAddress
-  );
+  // Optional since 1.1: it is asked for in Settings, Workspace, not here.
+  void storedSupportAddress;
+  void env;
+
+  return false;
 }
 
 /** Whether setup can be claimed right now, and what the page should ask for. */
@@ -230,7 +250,7 @@ export function resolveSetupView(
   } = {},
 ): SetupView {
   const appEnv = getEnv(env);
-  const tokenConfigured = appEnv.setup.token !== undefined;
+  const tokenConfigured = readOwnerProvisioningToken(env) !== undefined;
   const asksForSupportAddress = needsSupportAddress(storedSupportAddress, env);
 
   if (state.status === "complete") {
@@ -262,12 +282,30 @@ function assertSetupToken(
   state: SetupState,
   providedToken: string | undefined,
   env: EnvSource,
+  waived: boolean,
 ) {
-  const expectedToken = getEnv(env).setup.token;
+  const expectedToken = readOwnerProvisioningToken(env);
+
+  if (state.status === "fresh") {
+    // Defence in depth: the token is waived only where the deployment is
+    // access-protected, checked here again rather than trusted from the
+    // caller.
+    if (waived && allowsTokenFreeFirstOwner(env)) {
+      return;
+    }
+
+    // A public deployment with no token: nobody may claim it from the web.
+    if (expectedToken === undefined && !allowsTokenFreeFirstOwner(env)) {
+      throw new SetupError(
+        "This workspace's owner is created by its operator. Run `npm run owner:provision`, or set OWNER_PROVISIONING_TOKEN.",
+        403,
+      );
+    }
+  }
 
   if (state.status === "unclaimed" && expectedToken === undefined) {
     throw new SetupError(
-      "This site already has accounts. Set the SETUP_TOKEN environment variable and redeploy to choose its administrator.",
+      "This site already has accounts but no owner. Run `npm run owner:provision -- --promote <email>` to choose one.",
       403,
     );
   }
@@ -295,6 +333,7 @@ export async function completeSetup(
     database = getDb(),
     env = process.env,
     sessionUser = null,
+    setupToken = "required-when-set",
   }: CompleteSetupOptions,
 ): Promise<CompleteSetupResult> {
   const parsedBase = baseSetupSchema.safeParse(rawInput);
@@ -343,14 +382,17 @@ export async function completeSetup(
         );
       }
 
-      assertSetupToken(state, base.setupToken, env);
+      assertSetupToken(state, base.setupToken, env, setupToken === "waived");
 
       const now = Math.floor(Date.now() / 1000);
       const stored = await readStoredSettings(tx);
       const settingsUpdate: SettingsUpdate = {
-        organizationName: base.organizationName,
         setupCompletedAt: now,
       };
+
+      if (base.organizationName !== undefined) {
+        settingsUpdate.organizationName = base.organizationName;
+      }
 
       if (base.senderAddress !== undefined) {
         settingsUpdate.senderAddress = base.senderAddress.toLowerCase();

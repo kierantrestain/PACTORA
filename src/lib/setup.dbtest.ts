@@ -110,44 +110,31 @@ test("the support address given at setup is saved for this install, not guessed"
   assert.equal(resolveSettings(stored, env).supportAddress, "help@acme.com");
 });
 
-test("setup without a support address is refused before any account exists", async () => {
+test("setup without a support address creates the owner: it is optional since 1.1", async () => {
   const withoutSupportAddress: Record<string, string> = { ...setupInput };
 
   delete withoutSupportAddress.supportAddress;
+  delete withoutSupportAddress.organizationName;
 
-  for (const input of [
-    withoutSupportAddress,
-    { ...setupInput, supportAddress: "   " },
-  ]) {
-    await assert.rejects(
-      completeSetup(input, {
-        createAdminAccount: async () => {
-          throw new Error("no account may be created");
-        },
-        database,
-        env,
-      }),
-      (error: unknown) => {
-        assert.ok(error instanceof SetupError);
-        assert.equal(error.statusCode, 400);
-        assert.deepEqual(error.fieldErrors, {
-          supportAddress: "Enter an email address people can write to for help",
-        });
+  await completeSetup(withoutSupportAddress, {
+    createAdminAccount: async (input) => ({
+      userId: await insertUser(input.email),
+    }),
+    database,
+    env,
+  });
 
-        return true;
-      },
-    );
-  }
+  assert.deepEqual(await readSetupState(database), { status: "complete" });
+  const stored = await readStoredSettings(database);
+  // Nothing is guessed: both are added later under Settings, Workspace.
+  assert.equal(stored?.supportAddress, null);
+  assert.equal(stored?.organizationName, null);
+});
 
-  // Nothing was left behind: the next visitor starts from the beginning.
-  assert.equal(await countUsers(), 0);
-  assert.equal(await readStoredSettings(database), null);
-  assert.deepEqual(await readSetupState(database), { status: "fresh" });
-
-  // Every field that needs attention is named at once.
+test("an invalid support address is still refused before any account exists", async () => {
   await assert.rejects(
     completeSetup(
-      { ...withoutSupportAddress, password: "too short" },
+      { ...setupInput, password: "too short", supportAddress: "not one" },
       {
         createAdminAccount: async () => {
           throw new Error("no account may be created");
@@ -166,6 +153,7 @@ test("setup without a support address is refused before any account exists", asy
       return true;
     },
   );
+  assert.equal(await countUsers(), 0);
 });
 
 test("a password over 128 characters is refused with the limit before any account exists (issue #56)", async () => {
@@ -238,7 +226,7 @@ test("a deployment that sets SUPPORT_EMAIL is not asked for a support address", 
   );
 });
 
-test("someone who takes charge of an older install gives it a support address, unless it has one", async () => {
+test("someone who takes charge of an older install with the token keeps its support address", async () => {
   const claimEnv = { SETUP_TOKEN: "a-secret-of-the-owner" };
   const claim = {
     organizationName: "Second Wind Partners",
@@ -255,16 +243,12 @@ test("someone who takes charge of an older install gives it a support address, u
   };
   const options = { createAdminAccount, database, env: claimEnv, sessionUser };
 
-  await assert.rejects(completeSetup(claim, options), (error: unknown) => {
-    assert.ok(error instanceof SetupError);
-    assert.equal(error.statusCode, 400);
-    assert.deepEqual(Object.keys(error.fieldErrors), ["supportAddress"]);
-
-    return true;
-  });
-  // Still nobody in charge, and nothing saved.
+  // Without the token nobody may claim it.
+  await assert.rejects(
+    completeSetup({ organizationName: "x" }, options),
+    (error: unknown) => error instanceof SetupError && error.statusCode === 403,
+  );
   assert.deepEqual(await readSetupState(database), { status: "unclaimed" });
-  assert.equal(await readStoredSettings(database), null);
 
   await completeSetup(
     { ...claim, supportAddress: "desk@customer.example" },
@@ -272,18 +256,12 @@ test("someone who takes charge of an older install gives it a support address, u
   );
 
   assert.deepEqual(await readSetupState(database), { status: "complete" });
-  assert.equal(
-    (await readStoredSettings(database))?.supportAddress,
-    "desk@customer.example",
-  );
 
-  // The same install with nobody in charge again: the address it was
-  // given is kept, and is not asked for a second time.
+  // Nobody in charge again: the address it was given is kept.
   await database.query(`update public."user" set role = 'user'`);
   invalidateSettingsCache();
   await completeSetup(claim, options);
 
-  assert.deepEqual(await readSetupState(database), { status: "complete" });
   assert.equal(
     (await readStoredSettings(database))?.supportAddress,
     "desk@customer.example",
