@@ -52,6 +52,12 @@ export function fitsAsAttachments(
 }
 
 export type TransactionalEmailMessage = {
+  /** Sends through this connected account (test emails). */
+  accountId?: string;
+  /** The envelope this message is about: its sender's account sends it. */
+  envelopeId?: string;
+  /** Whose sending account to use when there is no envelope. */
+  senderUserId?: string;
   /** Not allowed in sendBatch: Resend's batch endpoint takes none. */
   attachments?: EmailAttachment[];
   htmlBody?: string;

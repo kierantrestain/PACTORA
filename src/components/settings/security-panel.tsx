@@ -21,6 +21,13 @@ type AuditResponse = {
 } | null;
 
 const EVENT_LABELS: Record<SystemAuditEvent["event"], string> = {
+  agreement_metadata_changed: "Agreement details changed",
+  email_account_connected: "Email account connected",
+  email_account_disconnected: "Email account disconnected",
+  invitation_accepted: "Invitation accepted",
+  invitation_created: "Person invited",
+  invitation_revoked: "Invitation withdrawn",
+  owner_registered: "Workspace owner registered",
   account_closure_requested: "Account closure requested",
   account_deleted: "Account deleted",
   api_key_created: "API key created",

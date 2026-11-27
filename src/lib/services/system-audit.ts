@@ -58,6 +58,13 @@ export const systemAuditEventTypes = [
   "team_deleted",
   "team_member_added",
   "team_member_removed",
+  "invitation_created",
+  "invitation_revoked",
+  "invitation_accepted",
+  "owner_registered",
+  "email_account_connected",
+  "email_account_disconnected",
+  "agreement_metadata_changed",
 ] as const;
 
 export type SystemAuditEventType = (typeof systemAuditEventTypes)[number];

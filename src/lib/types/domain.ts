@@ -132,6 +132,7 @@ export const emailTemplateKinds = [
   "renewal_reminder",
   "test_email",
   "signing_lock_alert",
+  "workspace_invitation",
 ] as const;
 
 export type EnvelopeStatus = (typeof envelopeStatuses)[number];
