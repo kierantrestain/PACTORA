@@ -81,8 +81,12 @@ export function checkSmtpEndpoint(input: {
   const errors: Record<string, string> = {};
   const host = normalizeSmtpHost(input.host);
 
-  if (!host || (!isIP(host.replace(/^\[|\]$/g, "")) && !HOST_PATTERN.test(host))) {
-    errors.host = "Enter the SMTP server's host name, such as smtp.example.com.";
+  if (
+    !host ||
+    (!isIP(host.replace(/^\[|\]$/g, "")) && !HOST_PATTERN.test(host))
+  ) {
+    errors.host =
+      "Enter the SMTP server's host name, such as smtp.example.com.";
   }
 
   if (!(ALLOWED_SMTP_PORTS as readonly number[]).includes(input.port)) {
@@ -119,7 +123,9 @@ export async function resolveSmtpAddress(
     addresses = [name];
   } else {
     if (!allowPrivate && isPrivateAddress(name)) {
-      throw refused(`${name} is a local address. Use the mail server's public name.`);
+      throw refused(
+        `${name} is a local address. Use the mail server's public name.`,
+      );
     }
 
     try {
@@ -134,7 +140,9 @@ export async function resolveSmtpAddress(
         {
           code: typeof code === "string" ? code : "EDNS",
           kind:
-            code === "ENOTFOUND" || code === "ENODATA" ? "permanent" : "transient",
+            code === "ENOTFOUND" || code === "ENODATA"
+              ? "permanent"
+              : "transient",
         },
       );
     }
@@ -194,7 +202,10 @@ function describeSmtpError(error: unknown, host: string): string {
     }.`;
   }
 
-  if (code === "ETLS" || /certificate|self.signed|altnames/i.test(String((error as Error).message))) {
+  if (
+    code === "ETLS" ||
+    /certificate|self.signed|altnames/i.test(String((error as Error).message))
+  ) {
     return `The TLS connection to ${host} could not be verified: ${(error as Error).message}`;
   }
 

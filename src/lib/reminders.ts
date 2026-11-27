@@ -23,6 +23,7 @@ import {
   recordAuditEvent,
   recordEmailSent,
 } from "./services/audit.ts";
+import { EmailTransportError } from "./email/types.ts";
 import {
   createEmailService,
   EMAIL_NOT_CONNECTED_MESSAGE,
@@ -293,6 +294,16 @@ function buildReminderEmail(input: {
   );
 
   return {
+    customization: {
+      introHtml: `<p>${escapeHtml(introLine)}</p>`,
+      introText: introLine,
+      variables: {
+        document_title: input.envelopeTitle,
+        organization_name: input.branding.productName,
+        recipient_name: input.signerName,
+        sender_name: input.senderName,
+      },
+    },
     htmlBody: legalFooter.htmlBody,
     subject,
     template: automatic
@@ -765,6 +776,17 @@ export async function sendManualEnvelopeNudge(
   const first = reminded[0];
 
   if (!first) {
+    if (isEmailNotConnectedError(deliveryError)) {
+      throw new ReminderMutationError(EMAIL_NOT_CONNECTED_MESSAGE, 503);
+    }
+
+    if (deliveryError instanceof EmailTransportError) {
+      throw new ReminderMutationError(
+        `The reminder could not be sent: ${deliveryError.message}`,
+        502,
+      );
+    }
+
     throw (
       deliveryError ??
       refusal ??

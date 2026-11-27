@@ -129,7 +129,9 @@ export function useOrganizationForm(
 
   // Refusals about fields another section edits, with a link to them.
   const elsewhere = (Object.keys(errors) as OrganizationSettingsField[])
-    .filter((field) => errors[field] && FIELD_SECTIONS[field].section !== section)
+    .filter(
+      (field) => errors[field] && FIELD_SECTIONS[field].section !== section,
+    )
     .map((field) => ({
       href: settingsHref(
         FIELD_SECTIONS[field].section,

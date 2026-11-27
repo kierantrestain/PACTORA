@@ -1,4 +1,5 @@
 import { DashboardShell } from "@/components/dashboard/dashboard-shell";
+import { GettingStarted } from "@/components/dashboard/getting-started";
 import {
   parseDashboardView,
   type DashboardView,
@@ -12,6 +13,7 @@ import {
   listTeamEnvelopesForUser,
   type DashboardEnvelopePage,
 } from "@/lib/envelopes";
+import { getOnboardingState } from "@/lib/onboarding";
 import { listTeamsForUser } from "@/lib/teams";
 
 /** Envelopes on one page of the dashboard. */
@@ -111,24 +113,33 @@ export default async function DashboardPage({
     initialState = "error";
   }
 
+  const onboarding = session
+    ? await getOnboardingState(session.user.id, { database }).catch(() => null)
+    : null;
+
   return (
-    <DashboardShell
-      // A new search or view starts the shell afresh, with its own search box.
-      key={`${view}:${search}`}
-      envelopes={result?.envelopes}
-      initialSearch={search}
-      initialState={initialState}
-      pagination={{
-        newerHref:
-          page > 1
-            ? buildDashboardHref({ page: page - 1, search, view })
+    <>
+      {onboarding && !onboarding.dismissed ? (
+        <GettingStarted isAdmin={onboarding.isAdmin} steps={onboarding.steps} />
+      ) : null}
+      <DashboardShell
+        // A new search or view starts the shell afresh, with its own search box.
+        key={`${view}:${search}`}
+        envelopes={result?.envelopes}
+        initialSearch={search}
+        initialState={initialState}
+        pagination={{
+          newerHref:
+            page > 1
+              ? buildDashboardHref({ page: page - 1, search, view })
+              : undefined,
+          olderHref: result?.hasMore
+            ? buildDashboardHref({ page: page + 1, search, view })
             : undefined,
-        olderHref: result?.hasMore
-          ? buildDashboardHref({ page: page + 1, search, view })
-          : undefined,
-      }}
-      view={views.length > 1 ? view : undefined}
-      views={views}
-    />
+        }}
+        view={views.length > 1 ? view : undefined}
+        views={views}
+      />
+    </>
   );
 }

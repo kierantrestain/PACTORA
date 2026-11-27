@@ -27,6 +27,8 @@ const CLOSURE_CONFIRMATION_PHRASE = "close my account";
 const GENERIC_ERROR_MESSAGE = "Something went wrong. Please try again.";
 
 type SettingsShellProps = {
+  /** Which cards to show: the account (profile, password, closure), sign-in security, or both. */
+  part?: "account" | "all" | "security";
   /** Why this account cannot be closed; shown in place of the button. */
   closureBlockedReason?: string | null;
   initialProfile?: ProfileValues;
@@ -181,6 +183,7 @@ function isNoOpEmailChangeMessage(message: string) {
 export function SettingsShell({
   closureBlockedReason = null,
   initialProfile = defaultProfileValues,
+  part = "all",
   twoFactor = {
     enabled: false,
     hasPassword: true,
@@ -189,6 +192,8 @@ export function SettingsShell({
   },
 }: SettingsShellProps) {
   const closureCopy = useClosureCopy();
+  const showAccount = part !== "security";
+  const showSecurity = part !== "account";
   const [profileValues, setProfileValues] = useState(initialProfile);
   const [savedProfileValues, setSavedProfileValues] = useState(initialProfile);
   const [profileErrors, setProfileErrors] = useState<ProfileErrors>({});
@@ -575,142 +580,159 @@ export function SettingsShell({
 
   return (
     <div className="space-y-5">
-      <PageHeader
-        description="Manage your sender profile, password, two-step sign-in and account lifecycle."
-        title="Settings"
-      />
+      {part === "all" ? (
+        <PageHeader
+          description="Manage your sender profile, password, two-step sign-in and account lifecycle."
+          title="Settings"
+        />
+      ) : null}
 
       {feedback ? <SettingsFeedback feedback={feedback} /> : null}
 
       <section data-animate="enter" data-animate-delay="1">
         <div className="space-y-5">
-          <div className="panel space-y-5 p-6 sm:p-8">
-            <SectionHeading title="Profile" />
+          {showAccount ? (
+            <div
+              className="panel scroll-mt-28 space-y-5 p-6 sm:p-8"
+              id="profile"
+            >
+              <SectionHeading title="Profile" />
 
-            <form className="space-y-5" onSubmit={handleProfileSubmit}>
-              <div className="grid gap-4 sm:grid-cols-2">
-                <FieldShell
-                  disabled={isBusy}
-                  error={profileErrors.fullName}
-                  label="Full name"
-                  name="fullName"
-                  onChange={handleProfileChange("fullName")}
-                  readOnly={false}
-                  value={profileValues.fullName}
-                />
-                <FieldShell
-                  disabled={isBusy}
-                  error={profileErrors.email}
-                  label="Email"
-                  name="email"
-                  onChange={handleProfileChange("email")}
-                  readOnly={false}
-                  type="email"
-                  value={profileValues.email}
-                />
-              </div>
-              <p className="text-sm leading-6 text-(--secondary)">
-                Email changes are verified through your current inbox first,
-                then the new inbox.
-              </p>
-
-              <ShellButton
-                className="w-fit"
-                loading={pendingAction === "profile"}
-                type="submit"
-              >
-                {pendingAction === "profile" ? "Saving..." : "Save changes"}
-              </ShellButton>
-            </form>
-          </div>
-
-          <div className="panel p-6 sm:p-8">
-            <div className="space-y-5">
-              <SectionHeading title="Password" />
-
-              <form className="space-y-5" onSubmit={handlePasswordSubmit}>
+              <form className="space-y-5" onSubmit={handleProfileSubmit}>
                 <div className="grid gap-4 sm:grid-cols-2">
                   <FieldShell
                     disabled={isBusy}
-                    error={passwordErrors.currentPassword}
-                    label="Current password"
-                    name="currentPassword"
-                    onChange={handlePasswordChange("currentPassword")}
-                    placeholder="••••••••••"
+                    error={profileErrors.fullName}
+                    label="Full name"
+                    name="fullName"
+                    onChange={handleProfileChange("fullName")}
                     readOnly={false}
-                    type="password"
-                    value={passwordValues.currentPassword}
+                    value={profileValues.fullName}
                   />
                   <FieldShell
                     disabled={isBusy}
-                    error={passwordErrors.newPassword}
-                    helper="Must be at least 15 characters"
-                    label="New password"
-                    name="newPassword"
-                    onChange={handlePasswordChange("newPassword")}
-                    placeholder="•••••••••••••••"
+                    error={profileErrors.email}
+                    label="Email"
+                    name="email"
+                    onChange={handleProfileChange("email")}
                     readOnly={false}
-                    type="password"
-                    value={passwordValues.newPassword}
+                    type="email"
+                    value={profileValues.email}
                   />
                 </div>
+                <p className="text-sm leading-6 text-(--secondary)">
+                  Email changes are verified through your current inbox first,
+                  then the new inbox.
+                </p>
 
-                <div className="flex flex-col gap-3 sm:flex-row sm:flex-wrap">
-                  <ShellButton
-                    className="w-fit"
-                    loading={pendingAction === "password"}
-                    type="submit"
-                  >
-                    {pendingAction === "password"
-                      ? "Updating..."
-                      : "Update password"}
-                  </ShellButton>
-                  <ShellButton
-                    disabled={isBusy}
-                    loading={pendingAction === "reset"}
-                    onClick={handleResetPasswordLink}
-                    variant="secondary"
-                  >
-                    {pendingAction === "reset"
-                      ? "Sending..."
-                      : "Email me a reset link"}
-                  </ShellButton>
-                </div>
+                <ShellButton
+                  className="w-fit"
+                  loading={pendingAction === "profile"}
+                  type="submit"
+                >
+                  {pendingAction === "profile" ? "Saving..." : "Save changes"}
+                </ShellButton>
               </form>
             </div>
-          </div>
+          ) : null}
 
-          <TwoFactorPanel
-            enabled={twoFactor.enabled}
-            hasPassword={twoFactor.hasPassword ?? true}
-            required={twoFactor.required}
-            ssoProviderName={twoFactor.ssoProviderName ?? null}
-          />
+          {showAccount ? (
+            <div className="panel scroll-mt-28 p-6 sm:p-8" id="password">
+              <div className="space-y-5">
+                <SectionHeading title="Password" />
 
-          <SessionsPanel />
+                <form className="space-y-5" onSubmit={handlePasswordSubmit}>
+                  <div className="grid gap-4 sm:grid-cols-2">
+                    <FieldShell
+                      disabled={isBusy}
+                      error={passwordErrors.currentPassword}
+                      label="Current password"
+                      name="currentPassword"
+                      onChange={handlePasswordChange("currentPassword")}
+                      placeholder="••••••••••"
+                      readOnly={false}
+                      type="password"
+                      value={passwordValues.currentPassword}
+                    />
+                    <FieldShell
+                      disabled={isBusy}
+                      error={passwordErrors.newPassword}
+                      helper="Must be at least 15 characters"
+                      label="New password"
+                      name="newPassword"
+                      onChange={handlePasswordChange("newPassword")}
+                      placeholder="•••••••••••••••"
+                      readOnly={false}
+                      type="password"
+                      value={passwordValues.newPassword}
+                    />
+                  </div>
 
-          <div className="panel p-6 sm:p-8">
-            <div className="space-y-5">
-              <SectionHeading title="Danger zone" />
-              <p className="max-w-2xl text-sm leading-6 text-(--secondary)">
-                {closureCopy}
-              </p>
-              {closureBlockedReason ? (
-                <p className="notice notice-warning max-w-2xl" role="status">
-                  {closureBlockedReason}
-                </p>
-              ) : (
-                <ShellButton
-                  className="w-fit border-[rgba(180,35,24,0.35)] text-(--danger) hover:border-(--danger) hover:bg-(--danger-soft) hover:text-(--danger)"
-                  disabled={isBusy}
-                  onClick={openClosureDialog}
-                  variant="secondary"
-                >
-                  Request account closure
-                </ShellButton>
-              )}
+                  <div className="flex flex-col gap-3 sm:flex-row sm:flex-wrap">
+                    <ShellButton
+                      className="w-fit"
+                      loading={pendingAction === "password"}
+                      type="submit"
+                    >
+                      {pendingAction === "password"
+                        ? "Updating..."
+                        : "Update password"}
+                    </ShellButton>
+                    <ShellButton
+                      disabled={isBusy}
+                      loading={pendingAction === "reset"}
+                      onClick={handleResetPasswordLink}
+                      variant="secondary"
+                    >
+                      {pendingAction === "reset"
+                        ? "Sending..."
+                        : "Email me a reset link"}
+                    </ShellButton>
+                  </div>
+                </form>
+              </div>
             </div>
-          </div>
+          ) : null}
+
+          {showSecurity ? (
+            <div className="scroll-mt-28 space-y-5" id="two-step-sign-in">
+              <TwoFactorPanel
+                enabled={twoFactor.enabled}
+                hasPassword={twoFactor.hasPassword ?? true}
+                required={twoFactor.required}
+                ssoProviderName={twoFactor.ssoProviderName ?? null}
+              />
+
+              <div className="scroll-mt-28" id="sessions">
+                <SessionsPanel />
+              </div>
+            </div>
+          ) : null}
+
+          {showAccount ? (
+            <div className="panel scroll-mt-28 p-6 sm:p-8" id="close-account">
+              <div className="space-y-5">
+                <SectionHeading title="Danger zone" />
+                <p className="max-w-2xl text-sm leading-6 text-(--secondary)">
+                  {closureCopy}
+                </p>
+                {closureBlockedReason ? (
+                  <p className="notice notice-warning max-w-2xl" role="status">
+                    {closureBlockedReason}
+                  </p>
+                ) : (
+                  <ShellButton
+                    className="w-fit border-[rgba(180,35,24,0.35)] text-(--danger) hover:border-(--danger) hover:bg-(--danger-soft) hover:text-(--danger)"
+                    disabled={isBusy}
+                    onClick={openClosureDialog}
+                    variant="secondary"
+                  >
+                    Request account closure
+                  </ShellButton>
+                )}
+              </div>
+            </div>
+          ) : null}
         </div>
       </section>
 

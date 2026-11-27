@@ -492,10 +492,12 @@ function buildCompletionSignerEmail(input: {
   signedDownloadUrl: string;
 }) {
   const subject = `"${input.envelopeTitle}" is fully signed`;
+  const introText = `"${input.envelopeTitle}" from ${input.senderName} has been fully signed in ${input.branding.productName}.`;
+  const introHtml = `<p>&ldquo;${escapeHtml(input.envelopeTitle)}&rdquo; from ${escapeHtml(input.senderName)} has been fully signed in ${escapeHtml(input.branding.productName)}.</p>`;
   const textBody = [
     `Hi ${input.signerName},`,
     "",
-    `"${input.envelopeTitle}" from ${input.senderName} has been fully signed in ${input.branding.productName}.`,
+    introText,
     ...(input.copyOnly
       ? [`${input.senderName} asked for you to receive a copy.`]
       : []),
@@ -509,7 +511,7 @@ function buildCompletionSignerEmail(input: {
   ].join("\n");
   const htmlBody = [
     `<p>Hi ${escapeHtml(input.signerName)},</p>`,
-    `<p>&ldquo;${escapeHtml(input.envelopeTitle)}&rdquo; from ${escapeHtml(input.senderName)} has been fully signed in ${escapeHtml(input.branding.productName)}.</p>`,
+    introHtml,
     input.copyOnly
       ? `<p>${escapeHtml(input.senderName)} asked for you to receive a copy.</p>`
       : "",
@@ -528,6 +530,16 @@ function buildCompletionSignerEmail(input: {
   );
 
   return {
+    customization: {
+      introHtml,
+      introText,
+      variables: {
+        document_title: input.envelopeTitle,
+        organization_name: input.branding.productName,
+        recipient_name: input.signerName,
+        sender_name: input.senderName,
+      },
+    },
     htmlBody: legalFooter.htmlBody,
     subject,
     template: "completion_notification" as const,

@@ -121,7 +121,10 @@ export class EmailAccountError extends Error {
     {
       code = null,
       fieldErrors = null,
-    }: { code?: string | null; fieldErrors?: Record<string, string> | null } = {},
+    }: {
+      code?: string | null;
+      fieldErrors?: Record<string, string> | null;
+    } = {},
   ) {
     super(message);
     this.name = "EmailAccountError";
@@ -571,9 +574,10 @@ async function replaceTeams(
   teamIds: readonly string[],
   database: DbExecutor,
 ): Promise<void> {
-  await database.query(`DELETE FROM email_account_teams WHERE account_id = $1`, [
-    accountId,
-  ]);
+  await database.query(
+    `DELETE FROM email_account_teams WHERE account_id = $1`,
+    [accountId],
+  );
 
   for (const teamId of new Set(teamIds)) {
     await database.query(
@@ -620,7 +624,7 @@ export function resolveSmtpInput(
 
   const username = preset.usernameIsAddress
     ? input.emailAddress
-    : (input.username?.trim() || input.emailAddress);
+    : input.username?.trim() || input.emailAddress;
 
   if (!input.password) {
     fieldErrors.password = preset.appPasswordRequired
@@ -664,7 +668,10 @@ export async function createAccount(
     throw new EmailAccountError(
       `Connect ${preset.name} with the "Connect with ${preset.oauth === "google" ? "Google" : "Microsoft"}" button. PACTORA never asks for a ${preset.oauth === "google" ? "Google" : "Microsoft"} password.`,
       400,
-      { code: "oauth_required", fieldErrors: { presetId: "Use the sign-in button for this provider." } },
+      {
+        code: "oauth_required",
+        fieldErrors: { presetId: "Use the sign-in button for this provider." },
+      },
     );
   }
 
@@ -677,7 +684,10 @@ export async function createAccount(
     );
   }
 
-  if (input.scope === "personal" && (input.isDefault || (input.sharedWith && input.sharedWith !== "nobody"))) {
+  if (
+    input.scope === "personal" &&
+    (input.isDefault || (input.sharedWith && input.sharedWith !== "nobody"))
+  ) {
     throw new EmailAccountError(
       "A personal account is only ever yours: it cannot be shared or be the organisation's default.",
       400,
@@ -685,7 +695,8 @@ export async function createAccount(
     );
   }
 
-  const sharedWith = input.scope === "organization" ? (input.sharedWith ?? "nobody") : "nobody";
+  const sharedWith =
+    input.scope === "organization" ? (input.sharedWith ?? "nobody") : "nobody";
 
   if (sharedWith === "teams") {
     await assertTeamsExist(input.teamIds ?? [], database);
@@ -784,7 +795,10 @@ export async function createAccount(
       throw new EmailAccountError(
         `${input.emailAddress} is already connected.`,
         409,
-        { code: "already_connected", fieldErrors: { emailAddress: "Already connected." } },
+        {
+          code: "already_connected",
+          fieldErrors: { emailAddress: "Already connected." },
+        },
       );
     }
 
@@ -793,7 +807,11 @@ export async function createAccount(
 
   const created = (await loadAccount(id, database))!;
 
-  return toAccountView(created, actor.userId, sharedWith === "teams" ? [...new Set(input.teamIds)].sort() : []);
+  return toAccountView(
+    created,
+    actor.userId,
+    sharedWith === "teams" ? [...new Set(input.teamIds)].sort() : [],
+  );
 }
 
 export async function updateAccount(
@@ -808,7 +826,9 @@ export async function updateAccount(
 
   if (
     account.scope === "personal" &&
-    (input.isDefault || (input.sharedWith && input.sharedWith !== "nobody") || input.teamIds)
+    (input.isDefault ||
+      (input.sharedWith && input.sharedWith !== "nobody") ||
+      input.teamIds)
   ) {
     throw new EmailAccountError(
       "A personal account is only ever yours: it cannot be shared or be the organisation's default.",
@@ -819,8 +839,16 @@ export async function updateAccount(
 
   const sharedWith = input.sharedWith ?? account.sharedWith;
 
-  if (sharedWith === "teams" && (input.sharedWith === "teams" || input.teamIds)) {
-    await assertTeamsExist(input.teamIds ?? (await listTeamIds([account.id], database)).get(account.id) ?? [], database);
+  if (
+    sharedWith === "teams" &&
+    (input.sharedWith === "teams" || input.teamIds)
+  ) {
+    await assertTeamsExist(
+      input.teamIds ??
+        (await listTeamIds([account.id], database)).get(account.id) ??
+        [],
+      database,
+    );
   }
 
   let encryptedCredentials = account.encryptedCredentials;
@@ -881,7 +909,9 @@ export async function updateAccount(
       `,
       [
         account.id,
-        input.displayName === undefined ? account.displayName : input.displayName,
+        input.displayName === undefined
+          ? account.displayName
+          : input.displayName,
         input.replyTo === undefined ? account.replyTo : input.replyTo,
         input.isDefault ?? account.isDefault,
         sharedWith,
@@ -926,7 +956,9 @@ export async function deleteAccountRow(
 ): Promise<EmailAccountRecord> {
   const account = await loadManagedAccount(actor.userId, accountId, database);
 
-  await database.query(`DELETE FROM email_accounts WHERE id = $1`, [account.id]);
+  await database.query(`DELETE FROM email_accounts WHERE id = $1`, [
+    account.id,
+  ]);
 
   return account;
 }
@@ -944,8 +976,7 @@ export async function requireManagedAccount(
 export async function recordAccountOutcome(
   accountId: string,
   outcome:
-    | { ok: true }
-    | { error: string; needsReconnect?: boolean; ok: false },
+    { ok: true } | { error: string; needsReconnect?: boolean; ok: false },
   database: DbExecutor = getDb(),
 ): Promise<void> {
   const timestamp = now();
@@ -973,7 +1004,12 @@ export async function recordAccountOutcome(
           updated_at = $3
       WHERE id = $1
     `,
-    [accountId, outcome.error.slice(0, 1000), timestamp, Boolean(outcome.needsReconnect)],
+    [
+      accountId,
+      outcome.error.slice(0, 1000),
+      timestamp,
+      Boolean(outcome.needsReconnect),
+    ],
   );
 }
 
@@ -999,4 +1035,20 @@ export async function loadDefaultAccount(
     database,
     `SELECT ${ACCOUNT_COLUMNS} FROM email_accounts a WHERE a.is_default AND a.scope = 'organization'`,
   );
+}
+
+/** Whether any mailbox is connected and working, for the setup notice. */
+export async function hasConnectedMailbox(
+  database: DbExecutor = getDb(),
+): Promise<boolean> {
+  try {
+    return (
+      (await queryOne<{ found: number }>(
+        database,
+        `SELECT 1 AS found FROM email_accounts WHERE status <> 'needs_reconnect' LIMIT 1`,
+      )) !== null
+    );
+  } catch {
+    return false;
+  }
 }

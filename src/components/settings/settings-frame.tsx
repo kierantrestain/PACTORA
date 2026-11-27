@@ -117,7 +117,9 @@ export function SettingsFrame({
             }
             value={active ?? ""}
           >
-            {active === null ? <option value="">Choose a section</option> : null}
+            {active === null ? (
+              <option value="">Choose a section</option>
+            ) : null}
             {sections.map((section) => (
               <option key={section.id} value={section.id}>
                 {section.label}
@@ -243,7 +245,10 @@ function SettingsSearch({ viewer }: { viewer: SettingsViewer }) {
           role="listbox"
         >
           {results.length === 0 ? (
-            <li className="px-3 py-2.5 text-sm text-(--secondary)" role="presentation">
+            <li
+              className="px-3 py-2.5 text-sm text-(--secondary)"
+              role="presentation"
+            >
               No settings match “{query.trim()}”.
             </li>
           ) : (

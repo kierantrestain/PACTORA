@@ -270,7 +270,7 @@ test("voiding with no email provider is refused as a setup state and leaves the 
         assert.ok(error instanceof EnvelopeMutationError);
         assert.equal(error.statusCode, 503);
         assert.match(error.message, /Email is not set up yet/);
-        assert.match(error.message, /Settings, Organization/);
+        assert.match(error.message, /Settings, Email & Integrations/);
         return true;
       },
     );

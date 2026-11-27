@@ -52,10 +52,12 @@ export function buildSigningInvitationEmail(
   const action = describeRequestedAction(input.role);
   const subject = `${input.senderName} requested your ${action.noun} on "${input.envelopeTitle}"`;
   const deadlineLine = buildDeadlineLine(input.expiresAt);
+  const introText = `${input.senderName} sent you "${input.envelopeTitle}" through ${productName}.`;
+  const introHtml = `<p>${escapeHtml(input.senderName)} sent you &ldquo;${escapeHtml(input.envelopeTitle)}&rdquo; through ${escapeHtml(productName)}.</p>`;
   const textBody = [
     `Hi ${input.signerName},`,
     "",
-    `${input.senderName} sent you "${input.envelopeTitle}" through ${productName}.`,
+    introText,
     "",
     `${action.linkText} here:`,
     input.signingUrl,
@@ -66,7 +68,7 @@ export function buildSigningInvitationEmail(
   ].join("\n");
   const htmlBody = [
     `<p>Hi ${escapeHtml(input.signerName)},</p>`,
-    `<p>${escapeHtml(input.senderName)} sent you &ldquo;${escapeHtml(input.envelopeTitle)}&rdquo; through ${escapeHtml(productName)}.</p>`,
+    introHtml,
     `<p><a href="${escapeHtml(input.signingUrl)}">${escapeHtml(action.linkText)}</a></p>`,
     deadlineLine ? `<p>${escapeHtml(deadlineLine)}</p>` : "",
     `<p>You do not need a ${escapeHtml(productName)} account to ${action.accountLine}.</p>`,
@@ -81,6 +83,16 @@ export function buildSigningInvitationEmail(
   );
 
   return {
+    customization: {
+      introHtml,
+      introText,
+      variables: {
+        document_title: input.envelopeTitle,
+        organization_name: productName,
+        recipient_name: input.signerName,
+        sender_name: input.senderName,
+      },
+    },
     htmlBody: legalFooter.htmlBody,
     subject,
     template: "signing_invitation",

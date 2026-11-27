@@ -4,6 +4,7 @@ import path from "node:path";
 
 import { Resend } from "resend";
 
+import { deliver } from "../email/engine.ts";
 import { getSettings } from "../settings.ts";
 import { type EmailTemplateKind } from "../types/domain.ts";
 import {
@@ -52,6 +53,17 @@ export function fitsAsAttachments(
 }
 
 export type TransactionalEmailMessage = {
+  /**
+   * Where the organisation's own wording (Settings, Email & Integrations,
+   * Email wording) may replace PACTORA's: the default opening paragraph as
+   * this message has it, in both parts, and the values its placeholders
+   * take. Links, deadlines and legal text are never part of it.
+   */
+  customization?: {
+    introHtml: string;
+    introText: string;
+    variables: Partial<Record<"document_title" | "organization_name" | "recipient_name" | "sender_name", string>>;
+  };
   /** Sends through this connected account (test emails). */
   accountId?: string;
   /** The envelope this message is about: its sender's account sends it. */
@@ -80,6 +92,13 @@ export type EmailSendOptions = {
 
 type CreateEmailServiceOptions = {
   env?: EnvSource;
+  /**
+   * Whether messages go through the delivery engine (src/lib/email): the
+   * sender's connected mailbox, the delivery log, retries. On by default
+   * wherever there is a database; the injected-client form below is the
+   * engine-free one the unit tests use.
+   */
+  routed?: boolean;
   /** Replaced in tests, where there is no database to read settings from. */
   resolveAddresses?: () => Promise<EmailAddresses>;
   resendClient?: Resend;
@@ -337,7 +356,7 @@ export async function resolveEmailAddresses(
 
 /** What a sender is told when an action needs email and none is connected. */
 export const EMAIL_NOT_CONNECTED_MESSAGE =
-  "Email is not set up yet, so signers can't be emailed. An administrator can finish email setup in Settings, Organization.";
+  "Email is not set up yet, so signers can't be emailed. Connect a mailbox in Settings, Email & Integrations, or copy the signing link from the envelope instead.";
 
 /**
  * Whether an error is createEmailService's refusal for a missing provider
@@ -357,11 +376,32 @@ export function isEmailNotConnectedError(error: unknown): boolean {
  */
 export function canSendEmail(env: EnvSource = process.env): boolean {
   try {
-    createEmailService({ env });
+    createEmailService({ env, routed: false });
     return true;
   } catch {
     // No provider key, or a driver this deployment cannot use: either way
     // nothing would be sent.
+    return readEnv(env, "PLATFORM_SMTP_URL") !== undefined;
+  }
+}
+
+/**
+ * canSendEmail, and also a default organisation mailbox connected in
+ * Settings, which carries platform mail when the operator set none.
+ */
+export async function canSendPlatformEmail(
+  env: EnvSource = process.env,
+): Promise<boolean> {
+  if (canSendEmail(env)) {
+    return true;
+  }
+
+  try {
+    const { loadDefaultAccount } = await import("../email/accounts.ts");
+    const account = await loadDefaultAccount();
+
+    return account !== null && account.status !== "needs_reconnect";
+  } catch {
     return false;
   }
 }
@@ -386,12 +426,63 @@ export function createLazyEmailService(
   };
 }
 
+/**
+ * The engine-backed service: every message is logged, routed to the
+ * sender's authorised mailbox, deduplicated by its idempotency key, and
+ * kept for a background retry where that is safe (src/lib/email/engine.ts).
+ */
+function createRoutedEmailService(env: EnvSource): EmailService {
+  const driver = resolveEmailDriver(env);
+
+  if (driver === "capture" && !isCaptureEmailDriverAllowed(env)) {
+    throw new Error(CAPTURE_IN_PRODUCTION_ERROR_MESSAGE);
+  }
+
+  const engineOptions = {
+    env,
+    resolveAddresses: () => resolveEmailAddresses(env),
+    resolveOrganizationName: async () =>
+      (await getSettings(env)).organizationName,
+  };
+
+  return {
+    send: (message, options) => deliver(message, options, engineOptions),
+    async sendBatch(messages, options) {
+      const results: EmailDeliveryResult[] = [];
+
+      for (const [index, message] of messages.entries()) {
+        results.push(
+          await deliver(
+            message,
+            options?.idempotencyKey
+              ? { ...options, idempotencyKey: `${options.idempotencyKey}/${String(index)}` }
+              : options,
+            engineOptions,
+          ),
+        );
+      }
+
+      return results;
+    },
+  };
+}
+
 export function createEmailService({
   env = process.env,
-  resolveAddresses = () => resolveEmailAddresses(env),
+  resolveAddresses,
   resendClient,
+  routed,
   wait = waitFor,
 }: CreateEmailServiceOptions = {}): EmailService {
+  if (
+    routed ??
+    (!resendClient && !resolveAddresses && Boolean(readEnv(env, "DATABASE_URL")))
+  ) {
+    return createRoutedEmailService(env);
+  }
+
+  resolveAddresses ??= () => resolveEmailAddresses(env);
+
   if (!resendClient && resolveEmailDriver(env) === "capture") {
     return createCaptureEmailService(env, resolveAddresses);
   }

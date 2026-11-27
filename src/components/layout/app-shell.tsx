@@ -156,15 +156,16 @@ export function AppShell({
               role="status"
             >
               <p className="text-sm leading-6 text-(--fg)">
-                <span className="font-bold">Email is not set up yet.</span>{" "}
-                Until it is, signers and new users will not receive messages
-                from this site.
+                <span className="font-bold">No mailbox is connected yet.</span>{" "}
+                Documents can still be prepared and sent: copy each
+                signer&apos;s link from the envelope until a mailbox is
+                connected.
               </p>
               <Link
                 className="shrink-0 text-sm font-bold text-(--warning) underline underline-offset-4"
-                href="/settings#organization"
+                href="/settings/email#providers"
               >
-                Finish email setup
+                Connect a mailbox
               </Link>
             </div>
           ) : null}

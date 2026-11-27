@@ -412,7 +412,7 @@ export function buildOpenApiDocument(
       },
       securitySchemes: {
         apiKey: {
-          description: "An API key from Settings, Organization, API keys.",
+          description: "An API key from Settings, Advanced Administration, API keys.",
           scheme: "bearer",
           type: "http",
         },

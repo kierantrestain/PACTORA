@@ -249,7 +249,7 @@ export async function issueEmbedLink(
 
   if (!(await isEmbedOriginAllowed(origin, database))) {
     throw new EmbeddingError(
-      "origin: this site is not allowed to frame signing pages. An administrator can add it under Settings, Organization, Embedded signing.",
+      "origin: this site is not allowed to frame signing pages. An administrator can add it under Settings, Advanced Administration, Embedded signing.",
       403,
     );
   }
@@ -269,7 +269,7 @@ export async function issueEmbedLink(
 
     if (!stillAllowed) {
       throw new EmbeddingError(
-        "origin: this site is not allowed to frame signing pages. An administrator can add it under Settings, Organization, Embedded signing.",
+        "origin: this site is not allowed to frame signing pages. An administrator can add it under Settings, Advanced Administration, Embedded signing.",
         403,
       );
     }

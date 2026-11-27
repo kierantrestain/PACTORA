@@ -80,6 +80,7 @@ import {
   recordAuditEvent,
   recordEmailSent,
 } from "./services/audit.ts";
+import { EmailTransportError } from "./email/types.ts";
 import {
   createEmailService,
   EMAIL_NOT_CONNECTED_MESSAGE,
@@ -530,6 +531,26 @@ export class EnvelopeMutationError extends Error {
  * so, before anything changes, instead of failing as an unexpected server
  * error (issues #53, #225).
  */
+/**
+ * A failed first invitation, as the sender should read it: no mailbox
+ * connected, or the mailbox's own reason (it needs reconnecting, the
+ * provider refused the message). The envelope is a draft again either way.
+ */
+function toSendFailure(error: unknown): unknown {
+  if (isEmailNotConnectedError(error)) {
+    return new EnvelopeMutationError(EMAIL_NOT_CONNECTED_MESSAGE, 503);
+  }
+
+  if (error instanceof EmailTransportError) {
+    return new EnvelopeMutationError(
+      `The invitation could not be sent: ${error.message} The envelope is still a draft.`,
+      502,
+    );
+  }
+
+  return error;
+}
+
 function createEmailServiceForSending(): EmailService {
   try {
     return createEmailService();
@@ -2941,7 +2962,7 @@ export async function sendDraftEnvelope(
 
     if (!(await hasEmbedOrigins(database))) {
       throw new EnvelopeMutationError(
-        "Embedded signing is off: no site is allowed to show signing pages. An administrator can add one under Settings, Organization, Embedded signing.",
+        "Embedded signing is off: no site is allowed to show signing pages. An administrator can add one under Settings, Advanced Administration, Embedded signing.",
         400,
       );
     }
@@ -3391,7 +3412,7 @@ export async function sendDraftEnvelope(
       );
     });
 
-    throw error;
+    throw toSendFailure(error);
   }
 
   for (const signer of firstSigners.slice(1)) {

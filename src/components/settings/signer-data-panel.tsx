@@ -73,7 +73,10 @@ export function SignerDataPanel() {
   }
 
   return (
-    <section className="panel scroll-mt-28 space-y-5 p-5 sm:p-7" id="signer-data">
+    <section
+      className="panel scroll-mt-28 space-y-5 p-5 sm:p-7"
+      id="signer-data"
+    >
       <div className="space-y-2">
         <h2 className="text-lg font-extrabold tracking-[-0.02em] text-(--fg)">
           Signer data requests

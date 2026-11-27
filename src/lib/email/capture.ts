@@ -3,11 +3,7 @@ import { mkdir, rename, writeFile } from "node:fs/promises";
 import path from "node:path";
 
 import { CAPTURED_MESSAGE_ID_PREFIX } from "../services/captured-email.ts";
-import {
-  isLocalDeployment,
-  readEnv,
-  type EnvSource,
-} from "../utils/env.ts";
+import { isLocalDeployment, readEnv, type EnvSource } from "../utils/env.ts";
 import { buildResendPayload } from "./resend.ts";
 import { type EmailTransport, type OutgoingMessage } from "./types.ts";
 

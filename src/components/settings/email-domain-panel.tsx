@@ -118,7 +118,6 @@ export function EmailSetupPanel() {
 
   return (
     <div className="space-y-5">
-
       {loadError ? (
         <p className="notice notice-danger" role="alert">
           {loadError}

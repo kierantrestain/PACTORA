@@ -7,6 +7,7 @@ import { BrandingProvider } from "@/components/layout/branding-provider";
 import { isAdminUser } from "@/lib/auth/admin";
 import { getAuthSession } from "@/lib/auth/server";
 import { buildBranding } from "@/lib/branding";
+import { hasConnectedMailbox } from "@/lib/email/accounts";
 import { emailNeedsAttention } from "@/lib/email-status";
 import { getInstallMetadata } from "@/lib/install";
 import { getSettings } from "@/lib/settings";
@@ -27,9 +28,10 @@ export default async function AuthenticatedAppLayout({
     redirect("/login");
   }
 
-  const [settings, isAdmin] = await Promise.all([
+  const [settings, isAdmin, mailboxConnected] = await Promise.all([
     getSettings(),
     isAdminUser(session.user.id),
+    hasConnectedMailbox(),
   ]);
 
   // The install requires two-step sign-in and this person has not set it
@@ -43,7 +45,9 @@ export default async function AuthenticatedAppLayout({
       <AppShell
         // Only the administrator can do anything about email, so only the
         // administrator is told when it still needs setting up.
-        showEmailSetupNotice={isAdmin && emailNeedsAttention(settings)}
+        showEmailSetupNotice={
+          isAdmin && !mailboxConnected && emailNeedsAttention(settings)
+        }
         user={{
           email: session.user.email,
           name: session.user.name,

@@ -105,7 +105,10 @@ export function sealSecret(
 
   cipher.setAAD(Buffer.from(context, "utf8"));
 
-  const body = Buffer.concat([cipher.update(plaintext, "utf8"), cipher.final()]);
+  const body = Buffer.concat([
+    cipher.update(plaintext, "utf8"),
+    cipher.final(),
+  ]);
 
   return [
     FORMAT_VERSION,

@@ -276,8 +276,20 @@ export async function createInvitation(
     });
     const withFooter = withUserEmailLegalFooter(content, branding, env);
 
+    const introText = content.textBody.split("\n")[0]!;
+    const introHtml = content.htmlBody.slice(0, content.htmlBody.indexOf("</p>") + 4);
+
     await (emailService ?? createEmailService({ env })).send(
       {
+        customization: {
+          introHtml,
+          introText,
+          variables: {
+            organization_name: branding.productName,
+            recipient_name: email,
+            sender_name: actor.name,
+          },
+        },
         htmlBody: withFooter.htmlBody,
         senderUserId: actor.id,
         subject: content.subject,

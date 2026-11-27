@@ -673,7 +673,9 @@ test("a send whose invitation email fails leaves no envelope.sent webhook", asyn
     // The capture's own error, so the send got as far as the email.
     await assert.rejects(
       createEnvelope(admin),
-      (error: unknown) => (error as { code?: unknown }).code === "ENOTDIR",
+      (error: unknown) =>
+        (error as { code?: unknown }).code === "ENOTDIR" ||
+        /ENOTDIR/.test((error as Error).message),
     );
   } finally {
     process.env.EMAIL_CAPTURE_DIR = outbox;

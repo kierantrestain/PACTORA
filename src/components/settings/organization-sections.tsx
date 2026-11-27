@@ -79,7 +79,9 @@ export function WorkspaceSettings({ initialSettings }: SectionProps) {
             helper="Shown in the header and in every email."
             label="Organization name"
             name="organization-name"
-            onChange={(event) => setValue("organizationName", event.target.value)}
+            onChange={(event) =>
+              setValue("organizationName", event.target.value)
+            }
             readOnly={false}
             value={values.organizationName}
           />
@@ -287,7 +289,9 @@ export function DocumentSettings({ initialSettings }: SectionProps) {
             aria-describedby="consent-disclosure-description"
             aria-invalid={errors.consentDisclosure ? true : undefined}
             className={
-              errors.consentDisclosure ? "min-h-48 border-(--danger)" : "min-h-48"
+              errors.consentDisclosure
+                ? "min-h-48 border-(--danger)"
+                : "min-h-48"
             }
             disabled={saving}
             id="consent-disclosure"
@@ -367,7 +371,10 @@ export function DocumentSettings({ initialSettings }: SectionProps) {
             </DialogDescription>
           </DialogHeader>
           <DialogFooter className="gap-3 sm:justify-end">
-            <ShellButton onClick={() => setNoticeOpen(false)} variant="secondary">
+            <ShellButton
+              onClick={() => setNoticeOpen(false)}
+              variant="secondary"
+            >
               Cancel
             </ShellButton>
             <ShellButton

@@ -1,4 +1,9 @@
-import { getDb, queryMany, queryOne, type DbExecutor } from "../db/connection.ts";
+import {
+  getDb,
+  queryMany,
+  queryOne,
+  type DbExecutor,
+} from "../db/connection.ts";
 import { escapeHtml } from "../utils/html.ts";
 
 // An organisation's own wording for a few messages: the subject and the
@@ -33,34 +38,36 @@ export type TemplateVariables = Partial<Record<TemplatePlaceholder, string>>;
 export type TemplateCopy = { intro: string; subject: string };
 
 /** Today's wording, written with placeholders. The signer's version. */
-export const DEFAULT_TEMPLATE_COPY: Record<EditableTemplateKind, TemplateCopy> = {
-  automatic_reminder: {
-    intro:
-      '{{sender_name}} is still waiting for your signature on "{{document_title}}", sent through {{organization_name}}.',
-    subject:
-      'Reminder: {{sender_name}} is waiting for your signature on "{{document_title}}"',
-  },
-  completion_notification: {
-    intro:
-      '"{{document_title}}" from {{sender_name}} has been fully signed in {{organization_name}}.',
-    subject: '"{{document_title}}" is fully signed',
-  },
-  manual_nudge: {
-    intro:
-      '{{sender_name}} sent you a reminder to sign "{{document_title}}" through {{organization_name}}.',
-    subject: '{{sender_name}} sent you a reminder to sign "{{document_title}}"',
-  },
-  signing_invitation: {
-    intro:
-      '{{sender_name}} sent you "{{document_title}}" through {{organization_name}}.',
-    subject:
-      '{{sender_name}} requested your signature on "{{document_title}}"',
-  },
-  workspace_invitation: {
-    intro: "{{sender_name}} invited you to join {{organization_name}}.",
-    subject: "{{sender_name}} invited you to {{organization_name}}",
-  },
-};
+export const DEFAULT_TEMPLATE_COPY: Record<EditableTemplateKind, TemplateCopy> =
+  {
+    automatic_reminder: {
+      intro:
+        '{{sender_name}} is still waiting for your signature on "{{document_title}}", sent through {{organization_name}}.',
+      subject:
+        'Reminder: {{sender_name}} is waiting for your signature on "{{document_title}}"',
+    },
+    completion_notification: {
+      intro:
+        '"{{document_title}}" from {{sender_name}} has been fully signed in {{organization_name}}.',
+      subject: '"{{document_title}}" is fully signed',
+    },
+    manual_nudge: {
+      intro:
+        '{{sender_name}} sent you a reminder to sign "{{document_title}}" through {{organization_name}}.',
+      subject:
+        '{{sender_name}} sent you a reminder to sign "{{document_title}}"',
+    },
+    signing_invitation: {
+      intro:
+        '{{sender_name}} sent you "{{document_title}}" through {{organization_name}}.',
+      subject:
+        '{{sender_name}} requested your signature on "{{document_title}}"',
+    },
+    workspace_invitation: {
+      intro: "{{sender_name}} invited you to join {{organization_name}}.",
+      subject: "{{sender_name}} invited you to {{organization_name}}",
+    },
+  };
 
 export function isEditableTemplateKind(
   value: unknown,
@@ -121,7 +128,9 @@ export function renderSubject(
   text: string,
   variables: TemplateVariables,
 ): string {
-  return renderTemplateText(text, variables).replace(/[\r\n]+/g, " ").trim();
+  return renderTemplateText(text, variables)
+    .replace(/[\r\n]+/g, " ")
+    .trim();
 }
 
 /**

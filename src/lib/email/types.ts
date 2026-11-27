@@ -11,6 +11,25 @@ export type EmailAttachment = {
 
 export type TransactionalEmailMessage = {
   /**
+   * Where the organisation's own wording (Settings, Email & Integrations,
+   * Email wording) may replace PACTORA's: the default opening paragraph as
+   * this message has it, in both parts, and the values its placeholders
+   * take. Links, deadlines and legal text are never part of it.
+   */
+  customization?: {
+    introHtml: string;
+    introText: string;
+    variables: Partial<
+      Record<
+        | "document_title"
+        | "organization_name"
+        | "recipient_name"
+        | "sender_name",
+        string
+      >
+    >;
+  };
+  /**
    * The mailbox to send through, by id. Only test_email uses it: the
    * sender must be allowed to use that account, or nothing is sent.
    */
@@ -45,11 +64,7 @@ export type EmailSendOptions = {
 export type EmailStream = "platform" | "agreement";
 
 export type TransportProvider =
-  | "gmail"
-  | "microsoft"
-  | "smtp"
-  | "resend"
-  | "capture";
+  "gmail" | "microsoft" | "smtp" | "resend" | "capture";
 
 export type MailboxAddress = { address: string; name: string | null };
 

@@ -122,7 +122,10 @@ export class OAuthFlowError extends Error {
   constructor(
     code: string,
     message: string,
-    { adminConsentUrl = null, statusCode = 400 }: { adminConsentUrl?: string | null; statusCode?: number } = {},
+    {
+      adminConsentUrl = null,
+      statusCode = 400,
+    }: { adminConsentUrl?: string | null; statusCode?: number } = {},
   ) {
     super(message);
     this.name = "OAuthFlowError";
@@ -141,7 +144,10 @@ function endpointsFor(
   tenant: string,
   options: OAuthOptions,
 ): OAuthEndpoints {
-  return { ...defaultEndpoints(provider, tenant), ...options.endpoints?.[provider] };
+  return {
+    ...defaultEndpoints(provider, tenant),
+    ...options.endpoints?.[provider],
+  };
 }
 
 function requireClient(provider: OAuthProviderName, env: EnvSource) {
@@ -258,7 +264,10 @@ export async function startOAuth(
   if (input.reconnectAccountId) {
     const account = await loadAccount(input.reconnectAccountId, database);
 
-    if (!account || !(await canManageAccount(actor.userId, account, database))) {
+    if (
+      !account ||
+      !(await canManageAccount(actor.userId, account, database))
+    ) {
       throw new OAuthFlowError(
         "not_found",
         "That email account no longer exists.",
@@ -276,7 +285,10 @@ export async function startOAuth(
     scope = account.scope;
   }
 
-  if (scope === "organization" && !(await isAdministrator(actor.userId, database))) {
+  if (
+    scope === "organization" &&
+    !(await isAdministrator(actor.userId, database))
+  ) {
     throw new OAuthFlowError(
       "forbidden",
       "Only an administrator can connect an organisation email account.",
@@ -290,10 +302,9 @@ export async function startOAuth(
   const stateHash = hashState(state);
 
   // Old states are cleared as new ones are made.
-  await database.query(
-    `DELETE FROM email_oauth_states WHERE expires_at < $1`,
-    [timestamp - 3600],
-  );
+  await database.query(`DELETE FROM email_oauth_states WHERE expires_at < $1`, [
+    timestamp - 3600,
+  ]);
   await database.query(
     `
       INSERT INTO email_oauth_states (
@@ -448,7 +459,9 @@ async function postToken(
   } catch (error) {
     throw fetchFailure(
       error,
-      provider === "google" ? "Google's sign-in service" : "Microsoft's sign-in service",
+      provider === "google"
+        ? "Google's sign-in service"
+        : "Microsoft's sign-in service",
     );
   }
 
@@ -475,13 +488,21 @@ export function decodeIdToken(idToken: string): IdentityClaims {
   const payload = idToken.split(".")[1];
 
   if (!payload) {
-    throw new OAuthFlowError("invalid_token", "The provider sent an unreadable identity.");
+    throw new OAuthFlowError(
+      "invalid_token",
+      "The provider sent an unreadable identity.",
+    );
   }
 
   try {
-    return JSON.parse(Buffer.from(payload, "base64url").toString("utf8")) as IdentityClaims;
+    return JSON.parse(
+      Buffer.from(payload, "base64url").toString("utf8"),
+    ) as IdentityClaims;
   } catch {
-    throw new OAuthFlowError("invalid_token", "The provider sent an unreadable identity.");
+    throw new OAuthFlowError(
+      "invalid_token",
+      "The provider sent an unreadable identity.",
+    );
   }
 }
 
@@ -507,11 +528,20 @@ async function identify(
     const audiences = Array.isArray(claims.aud) ? claims.aud : [claims.aud];
 
     if (!audiences.includes(client.clientId)) {
-      throw new OAuthFlowError("invalid_token", "The identity was issued for another app.");
+      throw new OAuthFlowError(
+        "invalid_token",
+        "The identity was issued for another app.",
+      );
     }
 
-    if (typeof claims.exp === "number" && claims.exp < currentTime(options) - 300) {
-      throw new OAuthFlowError("invalid_token", "The identity has expired. Try again.");
+    if (
+      typeof claims.exp === "number" &&
+      claims.exp < currentTime(options) - 300
+    ) {
+      throw new OAuthFlowError(
+        "invalid_token",
+        "The identity has expired. Try again.",
+      );
     }
   } else if (provider === "google" && tokens.access_token) {
     const endpoint = endpointsFor(provider, client.tenant, options).userinfo;
@@ -529,14 +559,21 @@ async function identify(
   }
 
   if (!claims?.sub && !claims?.oid) {
-    throw new OAuthFlowError("invalid_token", "The provider did not say which mailbox this is.");
+    throw new OAuthFlowError(
+      "invalid_token",
+      "The provider did not say which mailbox this is.",
+    );
   }
 
   if (provider === "google") {
-    const verified = claims.email_verified === true || claims.email_verified === "true";
+    const verified =
+      claims.email_verified === true || claims.email_verified === "true";
 
     if (!claims.email || !verified) {
-      throw new OAuthFlowError("unverified_email", "Google did not confirm this mailbox's address.");
+      throw new OAuthFlowError(
+        "unverified_email",
+        "Google did not confirm this mailbox's address.",
+      );
     }
 
     return {
@@ -548,10 +585,17 @@ async function identify(
     };
   }
 
-  const address = (claims.email ?? claims.preferred_username ?? "").toLowerCase();
+  const address = (
+    claims.email ??
+    claims.preferred_username ??
+    ""
+  ).toLowerCase();
 
   if (!address.includes("@")) {
-    throw new OAuthFlowError("unverified_email", "Microsoft did not say which mailbox this is.");
+    throw new OAuthFlowError(
+      "unverified_email",
+      "Microsoft did not say which mailbox this is.",
+    );
   }
 
   return {
@@ -566,12 +610,17 @@ async function identify(
   };
 }
 
-function hasSendScope(provider: OAuthProviderName, granted: string | undefined): boolean {
+function hasSendScope(
+  provider: OAuthProviderName,
+  granted: string | undefined,
+): boolean {
   const scopes = (granted ?? "").toLowerCase().split(/\s+/);
 
   return provider === "google"
     ? scopes.includes("https://www.googleapis.com/auth/gmail.send")
-    : scopes.some((scope) => scope === "mail.send" || scope.endsWith("/mail.send"));
+    : scopes.some(
+        (scope) => scope === "mail.send" || scope.endsWith("/mail.send"),
+      );
 }
 
 export type CallbackParams = {
@@ -594,7 +643,10 @@ export async function completeOAuth(
   const database = options.database ?? getDb();
 
   if (!params.state) {
-    throw new OAuthFlowError("invalid_state", "The sign-in did not come back complete. Start again from Settings.");
+    throw new OAuthFlowError(
+      "invalid_state",
+      "The sign-in did not come back complete. Start again from Settings.",
+    );
   }
 
   const state = await consumeOAuthState(actor.userId, params.state, options);
@@ -602,7 +654,10 @@ export async function completeOAuth(
   const provider = preset.oauth!;
 
   if (params.error || !params.code) {
-    if (provider === "microsoft" && isAdminConsentError(params.error, params.errorDescription)) {
+    if (
+      provider === "microsoft" &&
+      isAdminConsentError(params.error, params.errorDescription)
+    ) {
       throw new OAuthFlowError(
         "admin_consent_required",
         "Your Microsoft 365 administrator has to approve PACTORA before mailboxes can be connected.",
@@ -625,13 +680,18 @@ export async function completeOAuth(
       code_verifier: state.verifier,
       grant_type: "authorization_code",
       redirect_uri: oauthRedirectUri(env),
-      ...(provider === "microsoft" ? { scope: MICROSOFT_SCOPES.join(" ") } : {}),
+      ...(provider === "microsoft"
+        ? { scope: MICROSOFT_SCOPES.join(" ") }
+        : {}),
     },
     options,
   );
 
   if (exchange.status !== 200 || !exchange.body.access_token) {
-    if (provider === "microsoft" && isAdminConsentError(exchange.body.error, exchange.body.error_description)) {
+    if (
+      provider === "microsoft" &&
+      isAdminConsentError(exchange.body.error, exchange.body.error_description)
+    ) {
       throw new OAuthFlowError(
         "admin_consent_required",
         "Your Microsoft 365 administrator has to approve PACTORA before mailboxes can be connected.",
@@ -639,7 +699,10 @@ export async function completeOAuth(
       );
     }
 
-    throw new OAuthFlowError("token_exchange_failed", "The sign-in could not be completed. Try again.");
+    throw new OAuthFlowError(
+      "token_exchange_failed",
+      "The sign-in could not be completed. Try again.",
+    );
   }
 
   if (!hasSendScope(provider, exchange.body.scope)) {
@@ -656,7 +719,12 @@ export async function completeOAuth(
     );
   }
 
-  const identity = await identify(provider, state.presetId, exchange.body, options);
+  const identity = await identify(
+    provider,
+    state.presetId,
+    exchange.body,
+    options,
+  );
   const timestamp = currentTime(options);
   const credentials: StoredCredentials = {
     accessToken: exchange.body.access_token,
@@ -673,11 +741,16 @@ export async function completeOAuth(
       target = await loadAccount(state.reconnectAccountId, tx);
 
       if (!target || !(await canManageAccount(actor.userId, target, tx))) {
-        throw new OAuthFlowError("not_found", "That email account no longer exists.", { statusCode: 404 });
+        throw new OAuthFlowError(
+          "not_found",
+          "That email account no longer exists.",
+          { statusCode: 404 },
+        );
       }
 
       if (
-        (target.providerAccountId && target.providerAccountId !== identity.providerAccountId) ||
+        (target.providerAccountId &&
+          target.providerAccountId !== identity.providerAccountId) ||
         target.emailAddress.toLowerCase() !== identity.emailAddress
       ) {
         throw new OAuthFlowError(
@@ -686,8 +759,15 @@ export async function completeOAuth(
         );
       }
     } else {
-      if (state.scope === "organization" && !(await isAdministrator(actor.userId, tx))) {
-        throw new OAuthFlowError("forbidden", "Only an administrator can connect an organisation email account.", { statusCode: 403 });
+      if (
+        state.scope === "organization" &&
+        !(await isAdministrator(actor.userId, tx))
+      ) {
+        throw new OAuthFlowError(
+          "forbidden",
+          "Only an administrator can connect an organisation email account.",
+          { statusCode: 403 },
+        );
       }
 
       target = await queryOne<EmailAccountRecord>(
@@ -704,7 +784,10 @@ export async function completeOAuth(
         [state.scope, preset.provider, identity.emailAddress, actor.userId],
       );
 
-      if (target?.providerAccountId && target.providerAccountId !== identity.providerAccountId) {
+      if (
+        target?.providerAccountId &&
+        target.providerAccountId !== identity.providerAccountId
+      ) {
         throw new OAuthFlowError(
           "different_mailbox",
           `${identity.emailAddress} is already connected as a different ${preset.oauth === "google" ? "Google" : "Microsoft"} account.`,
@@ -713,7 +796,10 @@ export async function completeOAuth(
     }
 
     if (target) {
-      await saveAccountCredentials(target.id, credentials, { database: tx, env });
+      await saveAccountCredentials(target.id, credentials, {
+        database: tx,
+        env,
+      });
       await tx.query(
         `
           UPDATE email_accounts
@@ -788,12 +874,21 @@ export async function getAccessToken(
   }
 
   const reconnect = async (message: string): Promise<never> => {
-    await recordAccountOutcome(account.id, { error: message, needsReconnect: true, ok: false }, database);
-    throw new EmailTransportError(message, { code: "invalid_grant", kind: "auth" });
+    await recordAccountOutcome(
+      account.id,
+      { error: message, needsReconnect: true, ok: false },
+      database,
+    );
+    throw new EmailTransportError(message, {
+      code: "invalid_grant",
+      kind: "auth",
+    });
   };
 
   if (!credentials.refreshToken) {
-    return reconnect(`${preset.name} access has run out. ${reconnectRecovery(preset)}`);
+    return reconnect(
+      `${preset.name} access has run out. ${reconnectRecovery(preset)}`,
+    );
   }
 
   const refreshed = await postToken(
@@ -801,7 +896,9 @@ export async function getAccessToken(
     {
       grant_type: "refresh_token",
       refresh_token: credentials.refreshToken,
-      ...(preset.oauth === "microsoft" ? { scope: MICROSOFT_SCOPES.join(" ") } : {}),
+      ...(preset.oauth === "microsoft"
+        ? { scope: MICROSOFT_SCOPES.join(" ") }
+        : {}),
     },
     options,
   );
@@ -810,7 +907,8 @@ export async function getAccessToken(
     if (
       refreshed.body.error === "invalid_grant" ||
       refreshed.body.error === "unauthorized_client" ||
-      (refreshed.status === 400 && refreshed.body.error === "interaction_required")
+      (refreshed.status === 400 &&
+        refreshed.body.error === "interaction_required")
     ) {
       return reconnect(
         `${preset.name} no longer accepts PACTORA's access to ${account.emailAddress}. ${reconnectRecovery(preset)}`,
@@ -821,7 +919,10 @@ export async function getAccessToken(
       `${preset.name} could not renew access right now.`,
       {
         code: refreshed.body.error ?? null,
-        kind: refreshed.status >= 500 || refreshed.status === 429 ? "transient" : "auth",
+        kind:
+          refreshed.status >= 500 || refreshed.status === 429
+            ? "transient"
+            : "auth",
         statusCode: refreshed.status,
       },
     );

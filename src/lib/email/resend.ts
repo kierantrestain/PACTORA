@@ -22,7 +22,11 @@ const RATE_LIMIT_RETRIES = 3;
 const DEFAULT_RATE_LIMIT_WAIT_MS = 1_000;
 const MAX_RATE_LIMIT_WAIT_MS = 5_000;
 
-type ResendError = { message?: string; name?: string; statusCode?: number | null };
+type ResendError = {
+  message?: string;
+  name?: string;
+  statusCode?: number | null;
+};
 
 type ResendResult = {
   error: ResendError | null;
