@@ -7,7 +7,9 @@ export type ShellNavItem = {
 
 export const primaryNavItems: ShellNavItem[] = [
   { href: "/dashboard", label: "Documents" },
+  { href: "/builder", label: "Create" },
   { href: "/templates", label: "Templates" },
+  { href: "/agreements", label: "Agreements" },
   { href: "/envelopes/new", label: "New envelope" },
   { href: "/settings", label: "Settings" },
 ];
