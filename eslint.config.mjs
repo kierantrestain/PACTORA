@@ -22,6 +22,8 @@ const eslintConfig = defineConfig([
     "out/**",
     "build/**",
     "public/pdfjs/**",
+    // Local agent tooling and worktrees, never part of the app.
+    ".claude/**",
   ]),
 ]);
 
