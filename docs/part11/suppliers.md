@@ -1,6 +1,6 @@
 # Suppliers
 
-A SignuDoc install on Vercel runs on three outside services. Your organization chooses them, signs their terms, and should assess them as suppliers of a GxP system. None of them is controlled by the SignuDoc project.
+A PACTORA install on Vercel runs on three outside services. Your organization chooses them, signs their terms, and should assess them as suppliers of a GxP system. None of them is controlled by the PACTORA project.
 
 Check each supplier's current security reports and terms yourself. What they offer changes, and the plan you are on matters.
 
@@ -24,9 +24,9 @@ For each supplier, record:
 - Risk accepted by `[name, role, date]`
 - Next review: `[date]`
 
-## The SignuDoc project itself
+## The PACTORA project itself
 
-SignuDoc is open-source software provided as is, without a supplier agreement or support commitment. Treat it as software you take responsibility for:
+PACTORA is open-source software provided as is, without a supplier agreement or support commitment. Treat it as software you take responsibility for:
 
 - the code is public, and you can review it;
 - every version is tested in public CI;

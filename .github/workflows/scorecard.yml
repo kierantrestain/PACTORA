@@ -1,9 +1,9 @@
 # OpenSSF Scorecard: checks this repository's own security practices
 # (branch protection, pinned and reviewed changes, token permissions,
 # dependency updates and more) and publishes the score at
-# https://scorecard.dev/viewer/?uri=github.com/NYLLON-SOFTWARE/SignuDoc.
+# https://scorecard.dev/viewer/?uri=github.com/kierantrestain/PACTORA.
 #
-# Only in the SignuDoc repository itself; a copy skips it.
+# Only in the PACTORA repository itself; a copy skips it.
 
 name: Scorecard
 
@@ -19,7 +19,7 @@ permissions: read-all
 jobs:
   analysis:
     name: Scorecard analysis
-    if: github.repository == 'NYLLON-SOFTWARE/SignuDoc'
+    if: github.repository == 'kierantrestain/PACTORA'
     runs-on: ubuntu-latest
     permissions:
       actions: read

@@ -6,9 +6,9 @@
 # - signudoc-<version>.tar.gz: the source of the tagged commit.
 # - GitHub artifact attestations for both, signed through Sigstore, so
 #   anyone can check they were made by this workflow from this repository:
-#     gh attestation verify signudoc-<version>.tar.gz -R NYLLON-SOFTWARE/SignuDoc
+#     gh attestation verify signudoc-<version>.tar.gz -R kierantrestain/PACTORA
 #
-# Only in the SignuDoc repository itself; a copy skips it.
+# Only in the PACTORA repository itself; a copy skips it.
 
 name: Release artifacts
 
@@ -27,7 +27,7 @@ permissions:
 jobs:
   artifacts:
     name: SBOM and provenance
-    if: github.repository == 'NYLLON-SOFTWARE/SignuDoc'
+    if: github.repository == 'kierantrestain/PACTORA'
     runs-on: ubuntu-latest
     permissions:
       attestations: write

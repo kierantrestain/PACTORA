@@ -1,7 +1,7 @@
 # Static analysis of the app's TypeScript and of these workflows with
 # GitHub CodeQL. Findings go to the repository's Security tab.
 #
-# Only in the SignuDoc repository itself: a copy made by the Vercel Deploy
+# Only in the PACTORA repository itself: a copy made by the Vercel Deploy
 # button skips it (its owner can turn on CodeQL in their own settings).
 # Actions are pinned to a commit, with the version beside it.
 
@@ -20,7 +20,7 @@ permissions:
 jobs:
   analyze:
     name: Analyze (${{ matrix.language }})
-    if: github.repository == 'NYLLON-SOFTWARE/SignuDoc'
+    if: github.repository == 'kierantrestain/PACTORA'
     runs-on: ubuntu-latest
     permissions:
       actions: read

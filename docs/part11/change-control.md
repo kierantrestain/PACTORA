@@ -1,6 +1,6 @@
 # Release and change control
 
-SignuDoc publishes numbered [releases](https://github.com/NYLLON-SOFTWARE/SignuDoc/releases), such as `v0.5.2`. Each one is a tag on a commit on `main`, with the source archive, a software bill of materials and checksums attached (see [Verifying a release](../../SECURITY.md#verifying-a-release)). The release tag names the version in a change record. Your install runs whichever commit you last deployed in your copy (see [Keep your install up to date](../self-hosting.md#keep-your-install-up-to-date)), and that commit can differ from the release's when your copy has changes of its own, so record the deployed commit too. Change control is about deciding which version you run and showing that it still works.
+PACTORA publishes numbered [releases](https://github.com/kierantrestain/PACTORA/releases), such as `v0.5.2`. Each one is a tag on a commit on `main`, with the source archive, a software bill of materials and checksums attached (see [Verifying a release](../../SECURITY.md#verifying-a-release)). The release tag names the version in a change record. Your install runs whichever commit you last deployed in your copy (see [Keep your install up to date](../self-hosting.md#keep-your-install-up-to-date)), and that commit can differ from the release's when your copy has changes of its own, so record the deployed commit too. Change control is about deciding which version you run and showing that it still works.
 
 ## Evidence each version gives you
 
@@ -44,4 +44,4 @@ The following are changes too, and go through the same record:
 - a new administrator;
 - turning Part 11 mode off or on.
 
-Changes made inside SignuDoc are also in the install audit trail. Changes made in the hosting consoles are not, so record them yourself.
+Changes made inside PACTORA are also in the install audit trail. Changes made in the hosting consoles are not, so record them yourself.

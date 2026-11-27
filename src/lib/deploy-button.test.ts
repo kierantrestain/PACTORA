@@ -27,7 +27,7 @@ test("the button copies this repository and pre-fills its name", () => {
 
   assert.equal(
     link.searchParams.get("repository-url"),
-    "https://github.com/NYLLON-SOFTWARE/SignuDoc",
+    "https://github.com/kierantrestain/PACTORA",
   );
   assert.equal(link.searchParams.get("project-name"), "signudoc");
   assert.equal(link.searchParams.get("repository-name"), "signudoc");
@@ -115,12 +115,12 @@ test("the button's demo card is complete and its picture is in the repository", 
   // the repository, where the README shows the product.
   assert.equal(
     link.searchParams.get("demo-url"),
-    "https://github.com/NYLLON-SOFTWARE/SignuDoc",
+    "https://github.com/kierantrestain/PACTORA",
   );
 
   const image = link.searchParams.get("demo-image") ?? "";
   const prefix =
-    "https://raw.githubusercontent.com/NYLLON-SOFTWARE/SignuDoc/main/";
+    "https://raw.githubusercontent.com/kierantrestain/PACTORA/main/";
 
   assert.ok(image.startsWith(prefix), image);
   assert.ok(existsSync(path.join(repoRoot, image.slice(prefix.length))));

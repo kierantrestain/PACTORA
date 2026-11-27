@@ -5,7 +5,7 @@ import { useState } from "react";
 import { ShellButton } from "@/components/shared/form-shell";
 import type { UpdateStatus } from "@/lib/software-update";
 
-// The SignuDoc section of Settings, for the administrator: the version this
+// The PACTORA section of Settings, for the administrator: the version this
 // install runs, a button that asks GitHub whether a newer one is out, and
 // how to take it. Updating happens in the install's own GitHub repository,
 // not here: a workflow there opens a pull request, and Vercel deploys it.
@@ -59,10 +59,10 @@ export function UpdatesPanel({
         <div className="space-y-2">
           <p className="section-eyebrow">Administrator</p>
           <h2 className="text-2xl font-extrabold tracking-[-0.03em] text-(--fg)">
-            SignuDoc
+            PACTORA
           </h2>
           <p className="max-w-2xl text-sm leading-6 text-(--secondary)">
-            This site runs SignuDoc version{" "}
+            This site runs PACTORA version{" "}
             <span
               className="font-bold text-(--fg)"
               data-testid="running-version"
@@ -214,7 +214,7 @@ function HowToUpdate({ status }: { status: UpdateStatus }) {
               >
                 {repository.owner}/{repository.slug}
               </a>
-              , open the Update SignuDoc workflow and press{" "}
+              , open the Update PACTORA workflow and press{" "}
               <strong className="text-(--fg)">Run workflow</strong>. It also
               runs by itself once a week.
             </li>

@@ -1,8 +1,8 @@
-# Keeps a copy of SignuDoc up to date with the project's releases.
+# Keeps a copy of PACTORA up to date with the project's releases.
 #
-# The Vercel Deploy button copies SignuDoc into a repository of your own,
+# The Vercel Deploy button copies PACTORA into a repository of your own,
 # and Vercel deploys every push to it. This workflow, run in that copy,
-# brings in the latest SignuDoc release and opens a pull request with it.
+# brings in the latest PACTORA release and opens a pull request with it.
 # Vercel builds a preview of the pull request; merging it deploys the new
 # version, and the production build applies any database changes.
 #
@@ -29,9 +29,9 @@
 # If Vercel deploys from a branch other than the default branch, set the
 # repository variable SIGNUDOC_PRODUCTION_BRANCH to it.
 #
-# In the SignuDoc repository itself the job is skipped.
+# In the PACTORA repository itself the job is skipped.
 
-name: Update SignuDoc
+name: Update PACTORA
 
 on:
   schedule:
@@ -43,7 +43,7 @@ on:
         required: false
         default: ""
       based_on:
-        description: "Only when a run asks for it: the SignuDoc release or commit this copy started from, such as v0.1.0."
+        description: "Only when a run asks for it: the PACTORA release or commit this copy started from, such as v0.1.0."
         required: false
         default: ""
       merge:
@@ -63,12 +63,12 @@ jobs:
   update:
     name: Bring in the latest release
     # Expressions compare strings without regard to case.
-    if: github.repository != 'NYLLON-SOFTWARE/SignuDoc'
+    if: github.repository != 'kierantrestain/PACTORA'
     runs-on: ubuntu-latest
     timeout-minutes: 15
     env:
-      UPSTREAM: NYLLON-SOFTWARE/SignuDoc
-      UPSTREAM_GIT_URL: https://github.com/NYLLON-SOFTWARE/SignuDoc.git
+      UPSTREAM: kierantrestain/PACTORA
+      UPSTREAM_GIT_URL: https://github.com/kierantrestain/PACTORA.git
       GH_TOKEN: ${{ secrets.SIGNUDOC_UPDATE_TOKEN || github.token }}
       HAS_UPDATE_TOKEN: ${{ secrets.SIGNUDOC_UPDATE_TOKEN != '' }}
       REQUESTED_VERSION: ${{ inputs.version }}
@@ -104,10 +104,10 @@ jobs:
               stop "\"$REQUESTED_VERSION\" is not a release version such as v0.2.0."
             fi
             release_json=$(gh api "repos/$UPSTREAM/releases/tags/$tag") ||
-              stop "SignuDoc has no release $tag."
+              stop "PACTORA has no release $tag."
           else
             release_json=$(gh api "repos/$UPSTREAM/releases/latest") ||
-              stop "The latest SignuDoc release could not be read from GitHub."
+              stop "The latest PACTORA release could not be read from GitHub."
           fi
           tag=$(jq -r '.tag_name' <<< "$release_json")
           if ! [[ "$tag" =~ ^v[0-9]+\.[0-9]+\.[0-9]+([-+][0-9A-Za-z.-]+)?$ ]]; then
@@ -125,29 +125,29 @@ jobs:
           target=$(git rev-parse --verify "refs/signudoc/tags/$tag^{commit}") ||
             stop "Release $tag has no matching tag in $UPSTREAM."
 
-          # Which SignuDoc commit this copy last took. The newest of:
+          # Which PACTORA commit this copy last took. The newest of:
           #  - the commit named by an earlier run of this workflow,
           #  - a commit both histories share (a fork, or a manual merge),
           #  - the commit the Deploy button copied, found by its files.
           candidates=()
           if [ -n "${BASED_ON:-}" ]; then
             [[ "$BASED_ON" =~ ^[0-9A-Za-z._-]{1,100}$ ]] ||
-              stop "\"$BASED_ON\" is not a SignuDoc release or commit."
+              stop "\"$BASED_ON\" is not a PACTORA release or commit."
             based_on="$BASED_ON"
             if [[ "$based_on" =~ ^[0-9]+\.[0-9]+\.[0-9]+ ]]; then based_on="v$based_on"; fi
             base=$(git rev-parse -q --verify "refs/signudoc/tags/$based_on^{commit}" ||
               git rev-parse -q --verify "$based_on^{commit}") ||
-              stop "SignuDoc has no release or commit \"$BASED_ON\"."
+              stop "PACTORA has no release or commit \"$BASED_ON\"."
             git merge-base --is-ancestor "$base" refs/signudoc/main ||
               git merge-base --is-ancestor "$base" "$target" ||
-              stop "\"$BASED_ON\" is not a SignuDoc release or commit."
+              stop "\"$BASED_ON\" is not a PACTORA release or commit."
             candidates+=("$base")
           fi
           if [ -z "${BASED_ON:-}" ]; then
             while read -r sha; do
               if git cat-file -e "$sha^{commit}" 2> /dev/null; then candidates+=("$sha"); fi
             done < <(git log --max-count=200 --format=%B HEAD |
-              sed -n 's/^SignuDoc-Commit: \([0-9a-f]\{40\}\)[[:space:]]*$/\1/p')
+              sed -n 's/^PACTORA-Commit: \([0-9a-f]\{40\}\)[[:space:]]*$/\1/p')
           fi
           if [ -z "${BASED_ON:-}" ] && shared=$(git merge-base HEAD "$target" 2> /dev/null); then
             candidates+=("$shared")
@@ -155,13 +155,13 @@ jobs:
           if [ "${#candidates[@]}" -eq 0 ]; then
             mapfile -t roots < <(git rev-list --max-parents=0 HEAD)
             [ "${#roots[@]}" -eq 1 ] ||
-              stop "This repository's history has ${#roots[@]} starting points, so the SignuDoc version it came from cannot be found. Update by hand (docs/self-hosting.md)."
+              stop "This repository's history has ${#roots[@]} starting points, so the PACTORA version it came from cannot be found. Update by hand (docs/self-hosting.md)."
             root_tree=$(git rev-parse "${roots[0]}^{tree}")
             copied=$(git log --format='%H %T' refs/signudoc/main "$target" |
               awk -v tree="$root_tree" '$2 == tree { print $1; exit }' || true)
             if [ -z "$copied" ]; then
               # The first commit was changed before it was pushed. Take the
-              # SignuDoc commit with the fewest differing lines, and only
+              # PACTORA commit with the fewest differing lines, and only
               # when exactly one commit is that close.
               fewest=""
               tied=0
@@ -177,9 +177,9 @@ jobs:
                 fi
               done < <(git rev-list --max-count=500 refs/signudoc/main "$target")
               if [ "$tied" -eq 1 ]; then
-                stop "Your first commit matches no SignuDoc commit exactly, and several are equally close. Run this workflow again with \"based on\" set to the SignuDoc release you deployed, such as v0.1.0."
+                stop "Your first commit matches no PACTORA commit exactly, and several are equally close. Run this workflow again with \"based on\" set to the PACTORA release you deployed, such as v0.1.0."
               fi
-              summary "Your first commit matches no SignuDoc commit exactly. Using the closest one, ${copied:0:7}, which differs in $fewest lines. If that is not the version you deployed, run again with \"based on\" set to it."
+              summary "Your first commit matches no PACTORA commit exactly. Using the closest one, ${copied:0:7}, which differs in $fewest lines. If that is not the version you deployed, run again with \"based on\" set to it."
             fi
             candidates+=("$copied")
           fi
@@ -189,14 +189,14 @@ jobs:
           done
 
           # Without the token, a run leaves workflow files as they were and
-          # records how far they lag in SignuDoc-Workflows-Commit, so a later
+          # records how far they lag in PACTORA-Workflows-Commit, so a later
           # run with the token can still bring them in.
           wf_base="$base"
-          latest_update=$(git log -1 --format=%H --grep='^SignuDoc-Commit: ' HEAD)
+          latest_update=$(git log -1 --format=%H --grep='^PACTORA-Commit: ' HEAD)
           if [ -z "${BASED_ON:-}" ] && [ -n "$latest_update" ]; then
             message=$(git log -1 --format=%B "$latest_update")
-            recorded=$(sed -n 's/^SignuDoc-Commit: \([0-9a-f]\{40\}\)[[:space:]]*$/\1/p' <<< "$message" | head -n 1)
-            recorded_wf=$(sed -n 's/^SignuDoc-Workflows-Commit: \([0-9a-f]\{40\}\)[[:space:]]*$/\1/p' <<< "$message" | head -n 1)
+            recorded=$(sed -n 's/^PACTORA-Commit: \([0-9a-f]\{40\}\)[[:space:]]*$/\1/p' <<< "$message" | head -n 1)
+            recorded_wf=$(sed -n 's/^PACTORA-Workflows-Commit: \([0-9a-f]\{40\}\)[[:space:]]*$/\1/p' <<< "$message" | head -n 1)
             if [ "$recorded" = "$base" ] && [ -n "$recorded_wf" ] &&
               git cat-file -e "$recorded_wf^{commit}" 2> /dev/null; then
               wf_base="$recorded_wf"
@@ -211,11 +211,11 @@ jobs:
           fi
 
           if [ "$needs_code" = "false" ] && [ "$needs_workflows" = "false" ]; then
-            summary "Already up to date with SignuDoc $tag."
+            summary "Already up to date with PACTORA $tag."
             if ! git merge-base --is-ancestor "$target" "$wf_base"; then
               summary "" "Files in \`.github/workflows\` were left as they were by an earlier update. Add a \`SIGNUDOC_UPDATE_TOKEN\` secret (docs/self-hosting.md) and run this again to bring them in."
             fi
-            echo "Already up to date with SignuDoc $tag."
+            echo "Already up to date with PACTORA $tag."
             exit 0
           fi
 
@@ -224,14 +224,14 @@ jobs:
           if git ls-remote --exit-code --heads origin "$branch" > /dev/null; then
             open_pr=$(gh pr list --head "$branch" --state open --json url --jq '.[0].url // ""')
             if [ -n "$open_pr" ]; then
-              summary "SignuDoc $tag is waiting in $open_pr."
+              summary "PACTORA $tag is waiting in $open_pr."
             else
               summary "The branch $branch already exists. Open a pull request from it ($GITHUB_SERVER_URL/$GITHUB_REPOSITORY/compare/$BASE_BRANCH...$branch?expand=1), or delete it and run this again."
             fi
             exit 0
           fi
 
-          # Three-way merge: what SignuDoc changed since $base, applied on
+          # Three-way merge: what PACTORA changed since $base, applied on
           # top of this repository, keeping this repository's own changes.
           merged_tree=$(git rev-parse "HEAD^{tree}")
           if [ "$needs_code" = "true" ]; then
@@ -248,13 +248,13 @@ jobs:
               clashes=$(grep -v '^\.github/workflows/' <<< "$clashes" || true)
             fi
             if [ "$merge_status" -eq 1 ] && [ -n "$clashes" ]; then
-              summary "## SignuDoc $tag clashes with changes in this repository" "" \
-                "These files were changed both here and in SignuDoc, in the same places:" ""
+              summary "## PACTORA $tag clashes with changes in this repository" "" \
+                "These files were changed both here and in PACTORA, in the same places:" ""
               sed 's/^/- `/; s/$/`/' <<< "$clashes" >> "$GITHUB_STEP_SUMMARY"
-              summary "" "To update by hand, see \"Keep your install up to date\" in docs/self-hosting.md. Use \`${base}\` as the SignuDoc commit this repository is based on."
-              stop "SignuDoc $tag clashes with this repository's own changes. See the run summary."
+              summary "" "To update by hand, see \"Keep your install up to date\" in docs/self-hosting.md. Use \`${base}\` as the PACTORA commit this repository is based on."
+              stop "PACTORA $tag clashes with this repository's own changes. See the run summary."
             elif [ "$merge_status" -gt 1 ]; then
-              stop "git could not merge SignuDoc $tag."
+              stop "git could not merge PACTORA $tag."
             fi
             merged_tree=$(head -n 1 <<< "$merge_output")
           fi
@@ -266,7 +266,7 @@ jobs:
           # token may change workflows, which a workflow's own token may not.
           new_wf_base="$target"
           if [ "$HAS_UPDATE_TOKEN" != "true" ]; then
-            # Behind only if SignuDoc changed them since they were last taken.
+            # Behind only if PACTORA changed them since they were last taken.
             if ! git diff --quiet "$wf_base" "$target" -- .github/workflows; then
               new_wf_base="$wf_base"
             fi
@@ -286,12 +286,12 @@ jobs:
               --merge-base="$wf_base" HEAD "$target")
             wf_status=$?
             set -e
-            [ "$wf_status" -le 1 ] || stop "git could not merge the workflow files of SignuDoc $tag."
+            [ "$wf_status" -le 1 ] || stop "git could not merge the workflow files of PACTORA $tag."
             wf_clashes=$(tail -n +2 <<< "$wf_output" | grep '^\.github/workflows/' || true)
             if [ -n "$wf_clashes" ]; then
-              summary "## Workflow files in SignuDoc $tag clash with changes in this repository" ""
+              summary "## Workflow files in PACTORA $tag clash with changes in this repository" ""
               sed 's/^/- `/; s/$/`/' <<< "$wf_clashes" >> "$GITHUB_STEP_SUMMARY"
-              stop "Workflow files in SignuDoc $tag clash with this repository's own changes. See the run summary."
+              stop "Workflow files in PACTORA $tag clash with this repository's own changes. See the run summary."
             fi
             wf_tree=$(head -n 1 <<< "$wf_output")
             git rm -r --quiet --force --ignore-unmatch -- .github/workflows
@@ -301,7 +301,7 @@ jobs:
           fi
 
           if git diff --cached --quiet HEAD; then
-            summary "Nothing to change: this repository already has everything in SignuDoc $tag."
+            summary "Nothing to change: this repository already has everything in PACTORA $tag."
             exit 0
           fi
 
@@ -314,17 +314,17 @@ jobs:
           new_migrations=$(git diff --cached --no-renames --name-only --diff-filter=A HEAD -- db/migrations)
 
           git commit --quiet --file - << MESSAGE
-          Update SignuDoc to $tag
+          Update PACTORA to $tag
 
-          Brings in SignuDoc $tag ($release_url).
+          Brings in PACTORA $tag ($release_url).
 
-          SignuDoc-Version: $tag
-          SignuDoc-Commit: $new_base
-          SignuDoc-Workflows-Commit: $new_wf_base
+          PACTORA-Version: $tag
+          PACTORA-Commit: $new_base
+          PACTORA-Workflows-Commit: $new_wf_base
           MESSAGE
 
           {
-            echo "SignuDoc **$tag** is ready to deploy. [Release notes]($release_url)."
+            echo "PACTORA **$tag** is ready to deploy. [Release notes]($release_url)."
             echo
             echo "Merging this pull request deploys it. Vercel has built a preview from this branch; check it below before merging."
             if [ -n "$new_migrations" ]; then
@@ -341,7 +341,7 @@ jobs:
               echo
               echo "### Workflow files not updated"
               echo
-              echo "GitHub does not let this workflow change files in \`.github/workflows\`, so these still differ from SignuDoc $tag. Copy them from the release by hand, or add a \`SIGNUDOC_UPDATE_TOKEN\` secret (docs/self-hosting.md) and run the update again:"
+              echo "GitHub does not let this workflow change files in \`.github/workflows\`, so these still differ from PACTORA $tag. Copy them from the release by hand, or add a \`SIGNUDOC_UPDATE_TOKEN\` secret (docs/self-hosting.md) and run the update again:"
               echo
               sed 's/^/- `/; s/$/`/' <<< "$kept_workflows"
             fi
@@ -352,11 +352,11 @@ jobs:
             echo
             echo "---"
             echo
-            echo "Opened by the Update SignuDoc workflow."
+            echo "Opened by the Update PACTORA workflow."
             echo
-            echo "SignuDoc-Version: $tag"
-            echo "SignuDoc-Commit: $new_base"
-            echo "SignuDoc-Workflows-Commit: $new_wf_base"
+            echo "PACTORA-Version: $tag"
+            echo "PACTORA-Commit: $new_base"
+            echo "PACTORA-Workflows-Commit: $new_wf_base"
           } > "$RUNNER_TEMP/pr-body.md"
 
           {
@@ -379,17 +379,17 @@ jobs:
             # The branch was made from the production branch's tip, so this
             # is a fast-forward unless someone pushed in the meantime.
             git push origin "HEAD:refs/heads/$BASE_BRANCH"
-            summary "SignuDoc $TAG was merged into \`$BASE_BRANCH\`. Vercel is deploying it."
+            summary "PACTORA $TAG was merged into \`$BASE_BRANCH\`. Vercel is deploying it."
             exit 0
           fi
 
           git push --quiet origin "HEAD:refs/heads/$BRANCH"
           if url=$(gh pr create --base "$BASE_BRANCH" --head "$BRANCH" \
-            --title "Update SignuDoc to $TAG" --body-file "$RUNNER_TEMP/pr-body.md"); then
-            summary "Opened $url. Merge it to deploy SignuDoc $TAG."
+            --title "Update PACTORA to $TAG" --body-file "$RUNNER_TEMP/pr-body.md"); then
+            summary "Opened $url. Merge it to deploy PACTORA $TAG."
           else
             compare="$GITHUB_SERVER_URL/$GITHUB_REPOSITORY/compare/$BASE_BRANCH...$BRANCH?expand=1"
-            summary "The branch \`$BRANCH\` has SignuDoc $TAG, but this workflow may not open pull requests here." "" \
+            summary "The branch \`$BRANCH\` has PACTORA $TAG, but this workflow may not open pull requests here." "" \
               "Open one yourself: $compare" "" \
               "To let the workflow do it next time: Settings, Actions, General, \"Allow GitHub Actions to create and approve pull requests\"."
             echo "::warning::Open the pull request yourself: $compare"

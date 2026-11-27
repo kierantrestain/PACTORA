@@ -342,7 +342,7 @@ test("a backup made before identity confirmations kept their name keeps its conf
     target,
   });
 
-  // As an older SignuDoc would have written it: without that migration.
+  // As an older PACTORA would have written it: without that migration.
   const stored = target.objects.get(summary.databaseBackup)!;
   const lines = gunzipSync(stored.body).toString("utf8").split("\n");
   const header = JSON.parse(lines[0]!) as { migrations: string[] };

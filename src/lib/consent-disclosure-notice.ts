@@ -20,7 +20,7 @@ export const CUSTOM_DISCLOSURE_NOTICE = {
     },
     {
       lead: "One more thing, from us to you:",
-      text: "we're software folks, not lawyers. Nothing in SignuDoc, including the standard text we include for your signers, is legal advice, and we can't promise any wording will hold up between you and the people who sign. Before you rely on this as part of a legal agreement, please run it past your own legal counsel. They know your business and where your signers are.",
+      text: "we're software folks, not lawyers. Nothing in PACTORA, including the standard text we include for your signers, is legal advice, and we can't promise any wording will hold up between you and the people who sign. Before you rely on this as part of a legal agreement, please run it past your own legal counsel. They know your business and where your signers are.",
     },
   ],
   agree: "I agree",

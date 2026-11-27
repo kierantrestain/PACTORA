@@ -17,8 +17,8 @@ function release(overrides: Record<string, unknown> = {}) {
   return {
     body: "## Added\n- Update checks",
     draft: false,
-    html_url: "https://github.com/NYLLON-SOFTWARE/SignuDoc/releases/tag/v0.2.0",
-    name: "SignuDoc 0.2.0",
+    html_url: "https://github.com/kierantrestain/PACTORA/releases/tag/v0.2.0",
+    name: "PACTORA 0.2.0",
     prerelease: false,
     published_at: "2026-11-15T10:00:00Z",
     tag_name: "v0.2.0",
@@ -70,9 +70,9 @@ test("the deploy repository comes from Vercel's git variables", () => {
 
   assert.deepEqual(repository, {
     actionsUrl:
-      "https://github.com/acme/signudoc/actions/workflows/update-signudoc.yml",
+      "https://github.com/acme/signudoc/actions/workflows/update-pactora.yml",
     addWorkflowUrl:
-      "https://github.com/acme/signudoc/new/main?filename=.github%2Fworkflows%2Fupdate-signudoc.yml",
+      "https://github.com/acme/signudoc/new/main?filename=.github%2Fworkflows%2Fupdate-pactora.yml",
     branch: "main",
     isUpstream: false,
     owner: "acme",
@@ -106,8 +106,8 @@ test("a preview deployment still points at main, and upstream is recognised", ()
     VERCEL_ENV: "preview",
     VERCEL_GIT_COMMIT_REF: "signudoc-update/v0.2.0",
     VERCEL_GIT_PROVIDER: "github",
-    VERCEL_GIT_REPO_OWNER: "nyllon-software",
-    VERCEL_GIT_REPO_SLUG: "signudoc",
+    VERCEL_GIT_REPO_OWNER: "kierantrestain",
+    VERCEL_GIT_REPO_SLUG: "pactora",
   });
 
   assert.equal(repository?.branch, "main");
@@ -116,10 +116,10 @@ test("a preview deployment still points at main, and upstream is recognised", ()
 
 test("release info is read from GitHub's answer", () => {
   assert.deepEqual(toReleaseInfo(release()), {
-    name: "SignuDoc 0.2.0",
+    name: "PACTORA 0.2.0",
     notes: "## Added\n- Update checks",
     publishedAt: "2026-11-15T10:00:00Z",
-    url: "https://github.com/NYLLON-SOFTWARE/SignuDoc/releases/tag/v0.2.0",
+    url: "https://github.com/kierantrestain/PACTORA/releases/tag/v0.2.0",
     version: "0.2.0",
   });
   assert.equal(toReleaseInfo(release({ prerelease: true })), null);
@@ -127,7 +127,7 @@ test("release info is read from GitHub's answer", () => {
   // A link anywhere else is replaced with the project's own.
   assert.equal(
     toReleaseInfo(release({ html_url: "https://evil.example/x" }))?.url,
-    "https://github.com/NYLLON-SOFTWARE/SignuDoc/releases/tag/v0.2.0",
+    "https://github.com/kierantrestain/PACTORA/releases/tag/v0.2.0",
   );
 });
 

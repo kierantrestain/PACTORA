@@ -783,7 +783,7 @@ change: this release needs no migration step.
 - **Check for updates** in Settings, SignuDoc (administrators only): shows
   the version the site runs, asks GitHub for the latest release, and shows
   what is new in it.
-- **Update SignuDoc workflow** (`.github/workflows/update-signudoc.yml`) in
+- **Update SignuDoc workflow** (`.github/workflows/update-pactora.yml`) in
   each copy: runs every Monday or by hand, merges the new release with the
   copy on a `signudoc-update/<version>` branch and opens a pull request, so
   Vercel builds a preview first. Changes you made to the code are kept; where
@@ -799,7 +799,7 @@ change: this release needs no migration step.
 ### Upgrading from 0.1.0
 
 A copy made from 0.1.0 does not have the update workflow yet. Add
-`.github/workflows/update-signudoc.yml` to it once (Settings in SignuDoc
+`.github/workflows/update-pactora.yml` to it once (Settings in SignuDoc
 links to the right page, and `docs/self-hosting.md` has the steps), then run
 it. If it asks which version you deployed, use `v0.1.0`.
 

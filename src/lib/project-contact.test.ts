@@ -4,7 +4,7 @@ import { existsSync, readdirSync, readFileSync } from "node:fs";
 import path from "node:path";
 import { test } from "node:test";
 
-// SignuDoc is run by whoever deploys it. The project keeps no site and no
+// PACTORA is run by whoever deploys it. The project keeps no site and no
 // mailbox of its own, so nothing in the repository may send a person or a
 // message to one. An install's contact address is the one its administrator
 // gave at setup, and reports about the project itself go through GitHub.
@@ -92,7 +92,7 @@ test("security reports go through GitHub, not to an email address", () => {
 
   assert.ok(
     readFileSync(path.join(repoRoot, "SECURITY.md"), "utf8").includes(
-      "https://github.com/NYLLON-SOFTWARE/SignuDoc/security/advisories/new",
+      "https://github.com/kierantrestain/PACTORA/security/advisories/new",
     ),
   );
 });

@@ -69,14 +69,14 @@ test("a long name is cut without splitting an emoji", () => {
   assert.equal(senderAddress, senderAddress.toWellFormed());
 });
 
-test("an install with no name, and the hosted service, send as SignuDoc", () => {
+test("an install with no name, and the hosted service, send as PACTORA", () => {
   assert.equal(
     buildEmailAddresses({ ...base, organizationName: null }).senderAddress,
-    "SignuDoc <onboarding@resend.dev>",
+    "PACTORA <onboarding@resend.dev>",
   );
   assert.equal(
     buildEmailAddresses({ ...base, hosted: true }).senderAddress,
-    "SignuDoc <onboarding@resend.dev>",
+    "PACTORA <onboarding@resend.dev>",
   );
 });
 

@@ -638,7 +638,7 @@ test("extractSignerWebhookPayload extracts only the requested signer and omits o
   assert.deepEqual(
     extractSignerWebhookPayload(
       JSON.stringify({
-        data: { message: "A test event from SignuDoc. No envelope changed." },
+        data: { message: "A test event from PACTORA. No envelope changed." },
         timestamp: "2026-11-18T09:14:03.000Z",
         type: "webhook.test",
       }),
@@ -985,7 +985,7 @@ test("exportSignerData and eraseSignerData clean up finished, retrying, pending 
         eventType: "webhook.test",
         id: "msg_test",
         payload: JSON.stringify({
-          data: { message: "A test event from SignuDoc. No envelope changed." },
+          data: { message: "A test event from PACTORA. No envelope changed." },
           timestamp: "2026-11-18T09:14:03.000Z",
           type: "webhook.test",
         }),

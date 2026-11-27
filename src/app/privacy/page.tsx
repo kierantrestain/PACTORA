@@ -8,8 +8,8 @@ import { findPublicSupportAddress } from "@/lib/public-contact";
 
 export const metadata: Metadata = {
   description:
-    "Read how SignuDoc collects, uses, shares, retains, and protects information for its public U.S. e-signature service.",
-  title: "Privacy Policy | SignuDoc",
+    "Read how PACTORA collects, uses, shares, retains, and protects information for its public U.S. e-signature service.",
+  title: "Privacy Policy | PACTORA",
 };
 
 export default async function PrivacyPage() {
@@ -19,7 +19,7 @@ export default async function PrivacyPage() {
 
   return (
     <PublicDocumentShell
-      description="This Privacy Policy describes the categories of information SignuDoc collects, how we use and share that information, the rights available to users, and how to contact us with privacy requests."
+      description="This Privacy Policy describes the categories of information PACTORA collects, how we use and share that information, the rights available to users, and how to contact us with privacy requests."
       lastUpdated="March 25, 2026"
       title="Privacy Policy"
     >
@@ -28,15 +28,15 @@ export default async function PrivacyPage() {
           1. Scope and service design
         </h2>
         <p>
-          SignuDoc is a U.S.-focused electronic-signature service designed for
+          PACTORA is a U.S.-focused electronic-signature service designed for
           ordinary business agreements and similar commercial workflows. This
           Privacy Policy applies to account holders, signers, website visitors,
-          and support contacts who interact with SignuDoc.
+          and support contacts who interact with PACTORA.
         </p>
         <p>
-          SignuDoc is not intended for legally required consumer disclosure
+          PACTORA is not intended for legally required consumer disclosure
           workflows that need a separate E-SIGN consumer-consent process. If a
-          sender uses SignuDoc outside that scope, the sender remains
+          sender uses PACTORA outside that scope, the sender remains
           responsible for making sure the workflow is legally appropriate.
         </p>
       </section>
@@ -70,7 +70,7 @@ export default async function PrivacyPage() {
           </li>
           <li>
             <strong>Support and communications data</strong>, such as emails you
-            send to SignuDoc, account-closure requests, privacy requests, and
+            send to PACTORA, account-closure requests, privacy requests, and
             feedback about accessibility or product issues.
           </li>
           <li>
@@ -94,7 +94,7 @@ export default async function PrivacyPage() {
           <li>browse or interact with the website.</li>
         </ul>
         <p>
-          We also generate information automatically when SignuDoc records audit
+          We also generate information automatically when PACTORA records audit
           events, sends transactional emails, secures sessions, enforces rate
           limits, or stores completed records.
         </p>
@@ -128,18 +128,18 @@ export default async function PrivacyPage() {
         </h2>
         <p>
           We may share information with service providers that help us operate
-          SignuDoc, such as providers for authentication, cloud storage, email
+          PACTORA, such as providers for authentication, cloud storage, email
           delivery, hosting, infrastructure, logging, security, and customer
           support.
         </p>
         <p>
           We may also disclose information when reasonably necessary to comply
           with law, respond to legal process, protect the rights or safety of
-          SignuDoc, users, or the public, or in connection with a merger,
+          PACTORA, users, or the public, or in connection with a merger,
           acquisition, financing, or asset sale.
         </p>
         <p>
-          SignuDoc is not built as an advertising-supported service. If that
+          PACTORA is not built as an advertising-supported service. If that
           changes, we will update this Privacy Policy before using personal
           information in a materially different way.
         </p>
@@ -174,7 +174,7 @@ export default async function PrivacyPage() {
           7. Security
         </h2>
         <p>
-          SignuDoc uses administrative, technical, and physical safeguards that
+          PACTORA uses administrative, technical, and physical safeguards that
           are designed to protect personal information, including authenticated
           access controls, audit logging, rate limiting, security headers, and
           cloud-storage controls. No system is perfectly secure, and we cannot
@@ -188,7 +188,7 @@ export default async function PrivacyPage() {
         </h2>
         <p>
           Depending on where you live and the nature of your relationship with
-          SignuDoc, you may have rights to:
+          PACTORA, you may have rights to:
         </p>
         <ul className="list-disc space-y-2 pl-6">
           <li>know or access the personal information we hold about you;</li>
@@ -242,7 +242,7 @@ export default async function PrivacyPage() {
           10. Cookies and local storage
         </h2>
         <p>
-          SignuDoc uses cookies and similar technologies primarily for
+          PACTORA uses cookies and similar technologies primarily for
           authentication, session continuity, security, and basic application
           state. We may also store limited local settings needed to make the app
           usable, such as interface preferences and page state for active
@@ -257,13 +257,13 @@ export default async function PrivacyPage() {
           11. Children and international use
         </h2>
         <p>
-          SignuDoc is not directed to children under 13, and we do not knowingly
+          PACTORA is not directed to children under 13, and we do not knowingly
           collect personal information from children through the service. If you
           believe a child provided personal information to us, contact us so we
           can review and address the issue.
         </p>
         <p>
-          SignuDoc is operated for U.S.-focused business use. If you access the
+          PACTORA is operated for U.S.-focused business use. If you access the
           service from outside the United States, you understand that
           information may be processed and stored in the United States or other
           locations where our service providers operate.

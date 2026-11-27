@@ -1,5 +1,5 @@
 <p align="center">
-  <img src="docs/images/banner.png" alt="SignuDoc: e-signatures you actually own. Open source and MIT licensed. Send, sign and seal documents from your own Vercel account, at $0 per seat. Shown: a signer drawing a signature on a consulting agreement, and both signers marked Signed.">
+  <img src="docs/images/banner.png" alt="PACTORA: e-signatures you actually own. Open source and MIT licensed. Send, sign and seal documents from your own Vercel account, at $0 per seat. Shown: a signer drawing a signature on a consulting agreement, and both signers marked Signed.">
 </p>
 
 <p align="center">
@@ -8,23 +8,23 @@
 </p>
 
 <p align="center">
-  <a href="https://vercel.com/new/clone?repository-url=https%3A%2F%2Fgithub.com%2FNYLLON-SOFTWARE%2FSignuDoc&project-name=signudoc&repository-name=signudoc&stores=%5B%7B%22type%22%3A%22integration%22%2C%22integrationSlug%22%3A%22resend%22%2C%22productSlug%22%3A%22resend-email%22%2C%22protocol%22%3A%22messaging%22%7D%2C%7B%22type%22%3A%22integration%22%2C%22integrationSlug%22%3A%22neon%22%2C%22productSlug%22%3A%22neon%22%2C%22protocol%22%3A%22storage%22%7D%2C%7B%22type%22%3A%22blob%22%2C%22access%22%3A%22private%22%7D%5D&demo-title=SignuDoc&demo-description=Your%20own%20e-signature%20site.%20Upload%20a%20PDF%2C%20place%20fields%2C%20send%20signing%20links%2C%20and%20keep%20the%20signed%20copy%20with%20its%20audit%20certificate.&demo-url=https%3A%2F%2Fgithub.com%2FNYLLON-SOFTWARE%2FSignuDoc&demo-image=https%3A%2F%2Fraw.githubusercontent.com%2FNYLLON-SOFTWARE%2FSignuDoc%2Fmain%2Fdocs%2Fimages%2Fbanner.png"><img src="docs/images/deploy-to-vercel.svg" alt="Deploy to Vercel" height="32"></a><br>
+  <a href="https://vercel.com/new/clone?repository-url=https%3A%2F%2Fgithub.com%2Fkierantrestain%2FPACTORA&project-name=signudoc&repository-name=signudoc&stores=%5B%7B%22type%22%3A%22integration%22%2C%22integrationSlug%22%3A%22resend%22%2C%22productSlug%22%3A%22resend-email%22%2C%22protocol%22%3A%22messaging%22%7D%2C%7B%22type%22%3A%22integration%22%2C%22integrationSlug%22%3A%22neon%22%2C%22productSlug%22%3A%22neon%22%2C%22protocol%22%3A%22storage%22%7D%2C%7B%22type%22%3A%22blob%22%2C%22access%22%3A%22private%22%7D%5D&demo-title=PACTORA&demo-description=Your%20own%20e-signature%20site.%20Upload%20a%20PDF%2C%20place%20fields%2C%20send%20signing%20links%2C%20and%20keep%20the%20signed%20copy%20with%20its%20audit%20certificate.&demo-url=https%3A%2F%2Fgithub.com%2Fkierantrestain%2FPACTORA&demo-image=https%3A%2F%2Fraw.githubusercontent.com%2Fkierantrestain%2FPACTORA%2Fmain%2Fdocs%2Fimages%2Fbanner.png"><img src="docs/images/deploy-to-vercel.svg" alt="Deploy to Vercel" height="32"></a><br>
   <sub>or <a href="docs/deploy-with-an-agent.md">copy this to your LLM</a></sub>
 </p>
 
 <p align="center">
   <a href="#everything-it-takes-to-get-a-document-signed">Features</a> ·
-  <a href="#signudoc-and-docusign-side-by-side">SignuDoc vs DocuSign</a> ·
+  <a href="#signudoc-and-docusign-side-by-side">PACTORA vs DocuSign</a> ·
   <a href="#what-it-costs">What it costs</a> ·
   <a href="#get-started">Get started</a> ·
   <a href="docs/self-hosting.md">Self-hosting guide</a>
 </p>
 
-## Why SignuDoc
+## Why PACTORA
 
-**No seats to pay for.** SignuDoc is open source, and the Deploy button sets it up on free plans from Vercel, Neon and Resend, which carry about 250 documents a month for $0. A 15-person team pays DocuSign $8,100 a year for Business Pro seats, or $5,400 for Standard. SignuDoc costs the same whether one person sends or fifty.
+**No seats to pay for.** PACTORA is open source, and the Deploy button sets it up on free plans from Vercel, Neon and Resend, which carry about 250 documents a month for $0. A 15-person team pays DocuSign $8,100 a year for Business Pro seats, or $5,400 for Standard. PACTORA costs the same whether one person sends or fifty.
 
-**No envelope allowance to watch.** DocuSign's Standard and Business Pro plans include 100 envelopes per user per year. SignuDoc has no limit of its own. What you can send depends on your hosting plans, and the free ones carry about 250 documents a month.
+**No envelope allowance to watch.** DocuSign's Standard and Business Pro plans include 100 envelopes per user per year. PACTORA has no limit of its own. What you can send depends on your hosting plans, and the free ones carry about 250 documents a month.
 
 **Your documents stay in your accounts.** PDFs live in a private Vercel Blob store and everything else in a Neon Postgres database, both in your name and in the region you choose. Nobody else hosts your agreements, and the code is yours to read, change and run.
 
@@ -56,7 +56,7 @@ Each signer gets a link by email, agrees to use electronic records, and signs wi
 
 ### Know who is signing
 
-For documents that need more than an email link, ask a signer for an access code you give them yourself, or have SignuDoc email a one-time code when they open the link. The audit certificate records how each signer was checked, with their IP address and browser.
+For documents that need more than an email link, ask a signer for an access code you give them yourself, or have PACTORA email a one-time code when they open the link. The audit certificate records how each signer was checked, with their IP address and browser.
 
 ### Follow every envelope
 
@@ -72,17 +72,17 @@ Open any envelope and choose Save as template. The template keeps the document, 
 
 ### Send from your other apps
 
-Your own apps can send documents through SignuDoc's API. An administrator makes a key under Settings, and one call creates an envelope from a PDF with its signers and fields, and sends it. Signed webhooks tell your app when an envelope is sent, viewed, signed, completed, declined, voided or expires. Embedded signing shows the signing page inside your own site, for the sites an administrator allows. The [API guide](docs/api.md) has the details, and `/api/v1/openapi.json` on your install describes every endpoint.
+Your own apps can send documents through PACTORA's API. An administrator makes a key under Settings, and one call creates an envelope from a PDF with its signers and fields, and sends it. Signed webhooks tell your app when an envelope is sent, viewed, signed, completed, declined, voided or expires. Embedded signing shows the signing page inside your own site, for the sites an administrator allows. The [API guide](docs/api.md) has the details, and `/api/v1/openapi.json` on your install describes every endpoint.
 
 ### Sealed, certified, and checkable by anyone
 
-When the last signer finishes, SignuDoc builds the signed PDF and an audit certificate, seals both, and emails them to every signer and copy recipient. Names and text in Latin, Greek, Cyrillic, Chinese, Japanese and Korean scripts are drawn correctly. Anyone can drop a copy on the Verify page to see whether it is exactly the file the site produced; the file never leaves their device, only its fingerprint does.
+When the last signer finishes, PACTORA builds the signed PDF and an audit certificate, seals both, and emails them to every signer and copy recipient. Names and text in Latin, Greek, Cyrillic, Chinese, Japanese and Korean scripts are drawn correctly. Anyone can drop a copy on the Verify page to see whether it is exactly the file the site produced; the file never leaves their device, only its fingerprint does.
 
 ![The Verify page confirming that a signed contractor agreement is unchanged](docs/images/verify.png)
 
 ### Your name, logo and color
 
-Signers see your organization, not SignuDoc. Give the install your name, logo and brand color, and they appear on the site, the signing pages and every email. Serve it at your own domain and link your own terms and privacy policy.
+Signers see your organization, not PACTORA. Give the install your name, logo and brand color, and they appear on the site, the signing pages and every email. Serve it at your own domain and link your own terms and privacy policy.
 
 ![The same signing page in the organization's own green, with its logo](docs/images/branding.png)
 
@@ -103,18 +103,18 @@ Administrators see every member's sent and finished envelopes in an "Everyone's"
 
 ### On your phone
 
-SignuDoc works on small screens as well as large ones: check on your documents from your phone, and signers sign from theirs.
+PACTORA works on small screens as well as large ones: check on your documents from your phone, and signers sign from theirs.
 
 <p align="center">
   <img src="docs/images/phone.png" width="300" alt="The dashboard on a phone">
 </p>
 
-## SignuDoc and DocuSign, side by side
+## PACTORA and DocuSign, side by side
 
-DocuSign does more, and charges for it per user. SignuDoc does the everyday signing loop well, and it's yours. DocuSign's plans are as [DocuSign listed them](https://ecom.docusign.com/plans-and-pricing/esignature) in November 2026, for the US.
+DocuSign does more, and charges for it per user. PACTORA does the everyday signing loop well, and it's yours. DocuSign's plans are as [DocuSign listed them](https://ecom.docusign.com/plans-and-pricing/esignature) in November 2026, for the US.
 
 <p align="center">
-  <img src="docs/images/compare.png" alt="SignuDoc and DocuSign eSignature side by side, each with a green check for: signing without an account; signing order and copy recipients; signature, initials, date, name, text and checkbox fields; dropdown and radio button fields (on DocuSign: Business Pro, $45 a seat); reusable templates; deadlines and automatic reminders; your own logo and brand color (on DocuSign: from Standard, $30 a seat); accounts for your whole team (on DocuSign: from Standard); consent to electronic records; audit trail and certificate of completion; a tamper-evident seal on the finished PDF; working on a phone; two-step sign-in; and single sign-on (on DocuSign: Enhanced, priced by sales). To tick every box on DocuSign you need Enhanced; Business Pro, at $45 per user a month, ticks all but single sign-on.">
+  <img src="docs/images/compare.png" alt="PACTORA and DocuSign eSignature side by side, each with a green check for: signing without an account; signing order and copy recipients; signature, initials, date, name, text and checkbox fields; dropdown and radio button fields (on DocuSign: Business Pro, $45 a seat); reusable templates; deadlines and automatic reminders; your own logo and brand color (on DocuSign: from Standard, $30 a seat); accounts for your whole team (on DocuSign: from Standard); consent to electronic records; audit trail and certificate of completion; a tamper-evident seal on the finished PDF; working on a phone; two-step sign-in; and single sign-on (on DocuSign: Enhanced, priced by sales). To tick every box on DocuSign you need Enhanced; Business Pro, at $45 per user a month, ticks all but single sign-on.">
 </p>
 
 <p align="center">
@@ -123,7 +123,7 @@ DocuSign does more, and charges for it per user. SignuDoc does the everyday sign
 
 ### Price and ownership
 
-|                                  | SignuDoc                                                         | DocuSign eSignature                                                                      |
+|                                  | PACTORA                                                         | DocuSign eSignature                                                                      |
 | -------------------------------- | ---------------------------------------------------------------- | ---------------------------------------------------------------------------------------- |
 | **Price**                        | Free and open source, on free plans from Vercel, Neon and Resend | $11 (Personal), $30 (Standard) or $45 (Business Pro) per user a month, on an annual plan |
 | **Envelopes**                    | No limit of its own. The free plans carry about 250 a month      | 5 a month on Personal, 100 per user a year on Standard and Business Pro                  |
@@ -134,7 +134,7 @@ DocuSign does more, and charges for it per user. SignuDoc does the everyday sign
 
 ### The signing loop
 
-|                                              | SignuDoc                                                                                                                    | DocuSign eSignature                                                          |
+|                                              | PACTORA                                                                                                                    | DocuSign eSignature                                                          |
 | -------------------------------------------- | --------------------------------------------------------------------------------------------------------------------------- | ---------------------------------------------------------------------------- |
 | **Signing without an account**               | ✅                                                                                                                          | ✅                                                                           |
 | **Signing order**                            | ✅ in order, at the same time, or mixed, up to 25 signers                                                                   | ✅ in order, at the same time, or mixed                                      |
@@ -156,7 +156,7 @@ DocuSign does more, and charges for it per user. SignuDoc does the everyday sign
 
 ### Where DocuSign does more
 
-|                                                         | SignuDoc                                                            | DocuSign eSignature                                   |
+|                                                         | PACTORA                                                            | DocuSign eSignature                                   |
 | ------------------------------------------------------- | ------------------------------------------------------------------- | ----------------------------------------------------- |
 | **More than one document per envelope, and Word files** | — PDF only, one per envelope                                        | ✅                                                    |
 | **Web forms, payments**                                 | —                                                                   | ✅ on Business Pro                                    |
@@ -166,23 +166,23 @@ DocuSign does more, and charges for it per user. SignuDoc does the everyday sign
 | **HIPAA, 21 CFR Part 11, certifications**               | Part 11 mode and a SOC 2 pack; you validate and get audited         | ✅ on Enhanced or as add-ons                          |
 | **Support**                                             | GitHub issues                                                       | ✅ 24/7 on Enhanced                                   |
 
-If your agreements run through Salesforce, need SMS checks or ID document checks, or go out by the thousand in bulk, DocuSign earns its price. If you want to send everyday agreements, keep the evidence, and own the whole thing, SignuDoc is built for you.
+If your agreements run through Salesforce, need SMS checks or ID document checks, or go out by the thousand in bulk, DocuSign earns its price. If you want to send everyday agreements, keep the evidence, and own the whole thing, PACTORA is built for you.
 
 ## What it costs
 
-SignuDoc is free, and the Deploy button puts it on free plans from Vercel, Neon and Resend. Those plans carry about **250 documents a month**, however many people send them, before anything costs money. That is the first row below, and the rows after it are what you pay once you pass it.
+PACTORA is free, and the Deploy button puts it on free plans from Vercel, Neon and Resend. Those plans carry about **250 documents a month**, however many people send them, before anything costs money. That is the first row below, and the rows after it are what you pay once you pass it.
 
-| Documents sent in a year                                       | SignuDoc                                      | DocuSign Standard     | DocuSign Business Pro |
+| Documents sent in a year                                       | PACTORA                                      | DocuSign Standard     | DocuSign Business Pro |
 | -------------------------------------------------------------- | --------------------------------------------- | --------------------- | --------------------- |
 | **3,000**: 250 a month, the most the free plans carry          | **$0**                                        | $10,800, for 30 seats | $16,200, for 30 seats |
 | **5,000**: the most DocuSign's listed plans include            | $240, for Vercel Pro                          | $18,000, for 50 seats | $27,000, for 50 seats |
 | **7,200**: 600 a month, the most Resend's free plan will email | $240                                          | Quoted by sales       | Quoted by sales       |
 | **More than that**                                             | $480, for Vercel Pro and Resend Pro, plus use | Quoted by sales       | Quoted by sales       |
 
-DocuSign includes 100 envelopes per user a year, so its price for a number of documents is the seats it takes to send them. SignuDoc has no seats. A team of 15, for example:
+DocuSign includes 100 envelopes per user a year, so its price for a number of documents is the seats it takes to send them. PACTORA has no seats. A team of 15, for example:
 
 <p align="center">
-  <img src="docs/images/price.png" alt="15 people, one year. DocuSign Business Pro: 15 seats at $45 a month each is $8,100 a year, with 1,500 envelopes included, and person 16 adds $540 a year. On DocuSign Standard, at $30 a seat, the same team pays $5,400 a year and goes without dropdown and radio fields. SignuDoc: $0 a year, about 250 documents a month on the free plans, and person 16 adds $0. It runs on the free plans of Vercel, Neon and Resend. Vercel keeps its free plan for personal, non-commercial use: a company on Vercel Pro pays $20 a month, whatever its size. That team keeps $8,100 a year, or $7,860 on Vercel Pro.">
+  <img src="docs/images/price.png" alt="15 people, one year. DocuSign Business Pro: 15 seats at $45 a month each is $8,100 a year, with 1,500 envelopes included, and person 16 adds $540 a year. On DocuSign Standard, at $30 a seat, the same team pays $5,400 a year and goes without dropdown and radio fields. PACTORA: $0 a year, about 250 documents a month on the free plans, and person 16 adds $0. It runs on the free plans of Vercel, Neon and Resend. Vercel keeps its free plan for personal, non-commercial use: a company on Vercel Pro pays $20 a month, whatever its size. That team keeps $8,100 a year, or $7,860 on Vercel Pro.">
 </p>
 
 ### Where the $0 limit comes from
@@ -213,13 +213,13 @@ DocuSign's figures are its US list prices for annual plans in November 2026: $30
 
 ### Deploy to Vercel
 
-1. **Click Deploy to Vercel** above, and sign in to Vercel. It copies SignuDoc into your GitHub account and builds your site from that copy.
+1. **Click Deploy to Vercel** above, and sign in to Vercel. It copies PACTORA into your GitHub account and builds your site from that copy.
 2. **Add the three things Vercel offers to create**, each on a free plan: [Resend](https://resend.com) for email, a [Neon](https://neon.com) Postgres database, and a private [Vercel Blob](https://vercel.com/docs/vercel-blob) store.
 3. **Click Deploy.** The build creates the database tables by itself. If Vercel stops with "One or more integration resources failed to provision", nothing is wrong with your copy: Resend was still checking its domain. Wait a minute or two, refresh the page, and click **Redeploy**. See [If the first deployment fails](docs/self-hosting.md#if-the-first-deployment-fails).
 4. **Open your new site.** Name your organization, give the email address people should write to for help, and create the first account, which is the administrator.
 5. **Set up the address you send from.** Under Settings, Organization, enter an address at your own domain. The site lists the DNS records to add and checks them for you.
 
-**Taking new versions.** Settings, SignuDoc, **Check for updates** tells you when a new release is out and what is in it. A workflow that comes with your copy then opens a pull request with the release in your GitHub repository; merge it and Vercel deploys the update. See [Keep your install up to date](docs/self-hosting.md#keep-your-install-up-to-date).
+**Taking new versions.** Settings, PACTORA, **Check for updates** tells you when a new release is out and what is in it. A workflow that comes with your copy then opens a pull request with the release in your GitHub repository; merge it and Vercel deploys the update. See [Keep your install up to date](docs/self-hosting.md#keep-your-install-up-to-date).
 
 **Deploying with an AI agent.** An agent that can use your browser can do all of this for you. Point it at [docs/deploy-with-an-agent.md](docs/deploy-with-an-agent.md), which lists every screen, what to choose, what to ask you, and how to retry.
 
@@ -233,7 +233,7 @@ With Node.js 24 and Docker:
 npm install
 cp .env.example .env
 npm run db:start   # Postgres in Docker, with the schema applied
-npm run dev        # SignuDoc at http://localhost:3000
+npm run dev        # PACTORA at http://localhost:3000
 ```
 
 Files stay on disk and emails are written to `.data/outbox` instead of being sent, so you need no outside account. [Development](docs/development.md) says more.
@@ -244,9 +244,9 @@ Files stay on disk and emails are written to `.data/outbox` instead of being sen
 - **Secure by default.** Private file storage with no public URLs, a strict Content Security Policy, rate limits kept in Postgres, signing links that are hashed at rest, sign-in lockout, and a setup page that only the first visitor, or the holder of a `SETUP_TOKEN`, can use.
 - **Tested.** Unit tests, database tests against a real Postgres, and a browser test that sets up a fresh install, sends a document and signs it, run on every pull request.
 
-## Using SignuDoc for real agreements
+## Using PACTORA for real agreements
 
-SignuDoc is not a law firm and does not give legal advice, and nothing here is a promise that a signature made with it will be accepted for a given purpose. It gives you the features that electronic signature laws such as the US ESIGN Act and UETA and the EU's eIDAS regulation look for in a simple electronic signature: each signer's consent to electronic records, a record of who signed, when and how, optional identity checks, and a sealed copy that shows any change. Whether that is enough for a particular document depends on the document, where you and the signers are, and how you use it. Ask a lawyer when it matters.
+PACTORA is not a law firm and does not give legal advice, and nothing here is a promise that a signature made with it will be accepted for a given purpose. It gives you the features that electronic signature laws such as the US ESIGN Act and UETA and the EU's eIDAS regulation look for in a simple electronic signature: each signer's consent to electronic records, a record of who signed, when and how, optional identity checks, and a sealed copy that shows any change. Whether that is enough for a particular document depends on the document, where you and the signers are, and how you use it. Ask a lawyer when it matters.
 
 Every install has a page at `/electronic-signatures` that says what it is for, and senders confirm it before each send. It is meant for ordinary business agreements, such as contracts, NDAs, statements of work, offer letters, purchase orders and approvals. It is **not** built for:
 
@@ -267,23 +267,23 @@ Your install carries your organization's name, and your organization is responsi
 - [Backup and restore](docs/backup-and-restore.md): daily backups to a second Blob store, and restoring one.
 - [SOC 2 pack](docs/soc2/README.md) and [Part 11 validation pack](docs/part11/README.md): starting documents for an audit or a validation.
 - [Deploying with an AI agent](docs/deploy-with-an-agent.md): every screen of the deploy, for an agent that uses your browser.
-- [Development](docs/development.md): running SignuDoc locally, storage, the database, email, tests and the code's layout.
+- [Development](docs/development.md): running PACTORA locally, storage, the database, email, tests and the code's layout.
 - [Contributing](CONTRIBUTING.md) and [Security](SECURITY.md).
 
 ## License and credits
 
-SignuDoc is [MIT licensed](LICENSE). Copyright © 2026 Nyllon Software. It redistributes third-party assets, including bundled fonts and PDF.js, under their own licenses: see [THIRD_PARTY_NOTICES.md](THIRD_PARTY_NOTICES.md).
+PACTORA is [MIT licensed](LICENSE). Copyright © 2026 Nyllon Software. It redistributes third-party assets, including bundled fonts and PDF.js, under their own licenses: see [THIRD_PARTY_NOTICES.md](THIRD_PARTY_NOTICES.md).
 
-The project has no email address of its own. Report a security problem privately through GitHub, as [SECURITY.md](SECURITY.md) describes. For help with one particular site that runs SignuDoc, write to the organization that runs it.
+The project has no email address of its own. Report a security problem privately through GitHub, as [SECURITY.md](SECURITY.md) describes. For help with one particular site that runs PACTORA, write to the organization that runs it.
 
 ## Legal disclaimer
 
-**SignuDoc is an independent open source project. It is not affiliated with, associated with, authorized by, endorsed by, sponsored by, or in any way officially connected with DocuSign, Inc., or any of its subsidiaries or affiliates.** SignuDoc is not a DocuSign product, is not built on DocuSign's software or services, and does not use DocuSign's code.
+**PACTORA is an independent open source project. It is not affiliated with, associated with, authorized by, endorsed by, sponsored by, or in any way officially connected with DocuSign, Inc., or any of its subsidiaries or affiliates.** PACTORA is not a DocuSign product, is not built on DocuSign's software or services, and does not use DocuSign's code.
 
-"DocuSign" and related names, marks and logos are trademarks or registered trademarks of DocuSign, Inc. in the United States and other countries. They are used in this repository only to identify DocuSign's products for the purpose of comparison. No claim is made to any of them, and their use does not imply any relationship with, or approval by, DocuSign, Inc. All other product and company names, including Vercel, Neon and Resend, are trademarks of their respective owners, and SignuDoc is not affiliated with or endorsed by them either.
+"DocuSign" and related names, marks and logos are trademarks or registered trademarks of DocuSign, Inc. in the United States and other countries. They are used in this repository only to identify DocuSign's products for the purpose of comparison. No claim is made to any of them, and their use does not imply any relationship with, or approval by, DocuSign, Inc. All other product and company names, including Vercel, Neon and Resend, are trademarks of their respective owners, and PACTORA is not affiliated with or endorsed by them either.
 
-The comparisons on this page were made in good faith from DocuSign's publicly available website and plan documentation as of November 2026, for its US eSignature plans, and from SignuDoc's own code. DocuSign's features, plans and prices change, vary by country and contract, and may differ from what is described here. Nothing on this page is a statement by DocuSign. Check [DocuSign's own website](https://www.docusign.com) for current and authoritative information before you rely on any of it, and tell us through a GitHub issue if something here is out of date or wrong so that it can be corrected.
+The comparisons on this page were made in good faith from DocuSign's publicly available website and plan documentation as of November 2026, for its US eSignature plans, and from PACTORA's own code. DocuSign's features, plans and prices change, vary by country and contract, and may differ from what is described here. Nothing on this page is a statement by DocuSign. Check [DocuSign's own website](https://www.docusign.com) for current and authoritative information before you rely on any of it, and tell us through a GitHub issue if something here is out of date or wrong so that it can be corrected.
 
 The cost figures are estimates for illustration, not quotes. What you pay depends on your own use and on the prices of the services your install runs on.
 
-SignuDoc is provided "as is", without warranty of any kind, as the [MIT License](LICENSE) sets out. Nothing in this repository is legal advice. Whether an electronic signature is valid or enforceable for a particular document depends on the law that applies to it; ask a qualified lawyer.
+PACTORA is provided "as is", without warranty of any kind, as the [MIT License](LICENSE) sets out. Nothing in this repository is legal advice. Whether an electronic signature is valid or enforceable for a particular document depends on the law that applies to it; ask a qualified lawyer.

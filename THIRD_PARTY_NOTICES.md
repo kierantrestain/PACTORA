@@ -1,8 +1,22 @@
 # Third-Party Notices
 
-SignuDoc includes bundled third-party assets that remain under their own
-licenses. The project license applies to SignuDoc's code, but it does not
+PACTORA includes bundled third-party assets that remain under their own
+licenses. The project license applies to PACTORA's code, but it does not
 replace the licenses for redistributed third-party files.
+
+## Upstream foundation
+
+PACTORA is built on SignuDoc (https://github.com/NYLLON-SOFTWARE/SignuDoc),
+imported at release 0.9.2 with its full Git history.
+
+- **License:** MIT
+- **Copyright:** Copyright (c) 2026 Nyllon Software
+- **Notice:** retained in `LICENSE`. Every file that came from SignuDoc
+  remains available under the MIT terms it was published with.
+
+A machine-readable inventory of every npm dependency, with versions and
+licenses, is kept in `sbom.cdx.json` (CycloneDX). Regenerate it with
+`npm run sbom`.
 
 ## Bundled third-party assets
 

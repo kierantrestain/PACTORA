@@ -15,7 +15,7 @@ import type { WebhookDeliverySummary } from "@/lib/webhooks/log";
 
 const GENERIC_ERROR_MESSAGE = "Something went wrong. Please try again.";
 const WEBHOOK_DOCS_URL =
-  "https://github.com/NYLLON-SOFTWARE/SignuDoc/blob/main/docs/api.md#webhooks";
+  "https://github.com/kierantrestain/PACTORA/blob/main/docs/api.md#webhooks";
 
 const EVENT_LABELS: Record<WebhookEventType, string> = {
   "envelope.completed": "Completed",

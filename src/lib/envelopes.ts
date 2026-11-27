@@ -490,7 +490,7 @@ export type EnvelopeDetailData = {
   /** Sent in Part 11 mode: a void needs a reason. */
   part11: boolean;
   /**
-   * How signers sign, when not with SignuDoc's own simple signature: for
+   * How signers sign, when not with PACTORA's own simple signature: for
    * example "Qualified electronic signatures through eID Easy".
    */
   signatureTypeLabel: string | null;
@@ -2645,7 +2645,7 @@ export async function getReviewEnvelopeDataForUser(
 
   return {
     canSend: !isEmpty && !disabledReason,
-    // Approvers approve on SignuDoc's own page, so a signing provider is
+    // Approvers approve on PACTORA's own page, so a signing provider is
     // not offered alongside them (see sendDraftEnvelope).
     signingProvider:
       provider && !part11Mode && !hasApprovers ? { name: provider.name } : null,
@@ -2859,7 +2859,7 @@ export async function sendDraftEnvelope(
   const signatureLevel = input.signatureLevel ?? "simple";
   const hasApprovers = signers.some((signer) => signer.role === "approver");
 
-  // Approvers are SignuDoc's own. In Part 11 mode an approval would be an
+  // Approvers are PACTORA's own. In Part 11 mode an approval would be an
   // electronic signature with everything Part 11 asks of one, so the
   // approver signs instead (see PART11_APPROVER_MESSAGE). With signatures
   // through a signing provider, the finished document is the last
@@ -2870,12 +2870,12 @@ export async function sendDraftEnvelope(
 
   if (hasApprovers && signatureLevel !== "simple") {
     throw new EnvelopeMutationError(
-      "Approvers work with SignuDoc signatures only. Send with simple signatures, or make the approvers signers.",
+      "Approvers work with PACTORA signatures only. Send with simple signatures, or make the approvers signers.",
       400,
     );
   }
 
-  // Signing at the same time is for SignuDoc's own simple signatures.
+  // Signing at the same time is for PACTORA's own simple signatures.
   //
   // * Part 11 mode keeps one signer after another. Its validation
   //   (docs/part11, SYS-08 and OQ-06) is written for that order, and a

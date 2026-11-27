@@ -2,7 +2,7 @@ import { createHmac } from "node:crypto";
 import { createServer, type IncomingHttpHeaders } from "node:http";
 import type { AddressInfo } from "node:net";
 
-// A stand-in for an app that receives SignuDoc's webhooks: it keeps every
+// A stand-in for an app that receives PACTORA's webhooks: it keeps every
 // request, and checks signatures the way the Standard Webhooks spec says a
 // receiver should.
 

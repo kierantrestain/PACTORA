@@ -1,7 +1,7 @@
 import { createServer } from "node:http";
 import type { AddressInfo } from "node:net";
 
-// A stand-in for an app that shows SignuDoc's signing page in a frame. It
+// A stand-in for an app that shows PACTORA's signing page in a frame. It
 // serves one page that frames whatever ?src= says and keeps every message
 // the frame posts to it in window.signudocMessages.
 

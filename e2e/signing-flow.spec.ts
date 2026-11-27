@@ -210,7 +210,7 @@ test("a new install is set up, a sender sends a PDF and a recipient signs it", a
     await saveOrganization.click();
     await expect(notice).toBeVisible();
     await expect(notice).toContainText("U.S. E-SIGN Act");
-    await expect(notice).toContainText("Nothing in SignuDoc");
+    await expect(notice).toContainText("Nothing in PACTORA");
     await notice.getByRole("button", { name: "Cancel" }).click();
     await expect(notice).toBeHidden();
     await expect(
@@ -297,8 +297,8 @@ test("a new install is set up, a sender sends a PDF and a recipient signs it", a
       // The product's own link goes to its repository. There is no site
       // run by the project to send anyone to.
       await expect(
-        footer.getByRole("link", { name: "Powered by SignuDoc" }),
-      ).toHaveAttribute("href", "https://github.com/NYLLON-SOFTWARE/SignuDoc");
+        footer.getByRole("link", { name: "Powered by PACTORA" }),
+      ).toHaveAttribute("href", "https://github.com/kierantrestain/PACTORA");
     }
 
     // A signer with a question is sent to the organization's own address.
@@ -340,7 +340,7 @@ test("a new install is set up, a sender sends a PDF and a recipient signs it", a
 
     // Emails carry the organization's name, not the product's.
     expect(verificationEmail.text).toContain(
-      `Sent by ${ORGANIZATION_NAME} using SignuDoc.`,
+      `Sent by ${ORGANIZATION_NAME} using PACTORA.`,
     );
 
     await page.goto(

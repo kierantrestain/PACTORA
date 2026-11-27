@@ -808,7 +808,7 @@ test("an envelope of approvers only, or with approvers in Part 11 mode or with a
     ),
     (error: unknown) =>
       error instanceof EnvelopeMutationError &&
-      /Approvers work with SignuDoc signatures only/.test(error.message),
+      /Approvers work with PACTORA signatures only/.test(error.message),
   );
 
   const part11 = await createDraft();

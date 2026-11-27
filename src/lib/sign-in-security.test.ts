@@ -163,7 +163,7 @@ test("TwoFactorPanel view for SSO-only accounts hides password setup and org req
   const optionalDefault = describeTwoFactorPanel({
     enabled: false,
     hasPassword: false,
-    productName: "SignuDoc",
+    productName: "PACTORA",
     required: false,
     ssoProviderName: "single sign-on",
   });
@@ -174,7 +174,7 @@ test("TwoFactorPanel view for SSO-only accounts hides password setup and org req
   assert.equal(optionalDefault.statusLabel, "Managed by identity provider");
   assert.equal(optionalDefault.statusTone, "neutral");
   assert.match(optionalDefault.description, /signs in with single sign-on and/);
-  assert.match(optionalDefault.description, /no SignuDoc password/);
+  assert.match(optionalDefault.description, /no PACTORA password/);
   assert.match(
     optionalDefault.description,
     /managed by your identity provider/,
@@ -209,7 +209,7 @@ test("TwoFactorPanel view for SSO-only accounts hides password setup and org req
   const noConfiguredProvider = describeTwoFactorPanel({
     enabled: false,
     hasPassword: false,
-    productName: "SignuDoc",
+    productName: "PACTORA",
     required: true,
     ssoProviderName: null,
   });
@@ -218,7 +218,7 @@ test("TwoFactorPanel view for SSO-only accounts hides password setup and org req
   assert.equal(noConfiguredProvider.canManage, false);
   assert.match(
     noConfiguredProvider.description,
-    /signs in with single sign-on and has no SignuDoc password/,
+    /signs in with single sign-on and has no PACTORA password/,
   );
 
   // Even in a degenerate state where twoFactorEnabled was true without a
@@ -226,7 +226,7 @@ test("TwoFactorPanel view for SSO-only accounts hides password setup and org req
   const degenerate = describeTwoFactorPanel({
     enabled: true,
     hasPassword: false,
-    productName: "SignuDoc",
+    productName: "PACTORA",
     required: false,
     ssoProviderName: "Okta",
   });
@@ -240,7 +240,7 @@ test("TwoFactorPanel view for password and hybrid SSO+password accounts keeps no
   const passwordOptional = describeTwoFactorPanel({
     enabled: false,
     hasPassword: true,
-    productName: "SignuDoc",
+    productName: "PACTORA",
     required: false,
     ssoProviderName: null,
   });
@@ -250,7 +250,7 @@ test("TwoFactorPanel view for password and hybrid SSO+password accounts keeps no
   assert.equal(passwordOptional.canDisable, false);
   assert.equal(passwordOptional.statusLabel, "Off");
   assert.equal(passwordOptional.statusTone, "neutral");
-  assert.match(passwordOptional.description, /^After your password, SignuDoc/);
+  assert.match(passwordOptional.description, /^After your password, PACTORA/);
   assert.doesNotMatch(
     passwordOptional.description,
     /Your organization requires it\./,
@@ -259,7 +259,7 @@ test("TwoFactorPanel view for password and hybrid SSO+password accounts keeps no
   const hybridRequired = describeTwoFactorPanel({
     enabled: false,
     hasPassword: true,
-    productName: "SignuDoc",
+    productName: "PACTORA",
     required: true,
     ssoProviderName: "Okta",
   });
@@ -267,7 +267,7 @@ test("TwoFactorPanel view for password and hybrid SSO+password accounts keeps no
   assert.equal(hybridRequired.mode, "password");
   assert.equal(hybridRequired.canManage, true);
   assert.equal(hybridRequired.statusLabel, "Off");
-  assert.match(hybridRequired.description, /^After your password, SignuDoc/);
+  assert.match(hybridRequired.description, /^After your password, PACTORA/);
   assert.match(hybridRequired.description, /Your organization requires it\.$/);
 
   const enabledOptional = describeTwoFactorPanel({
