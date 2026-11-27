@@ -605,6 +605,7 @@ const TIMELINE_TONE_MAP: Record<
   declined: "danger",
   email_sent: "neutral",
   expired: "danger",
+  link_shared: "neutral",
   reauthentication_failed: "danger",
   reminded_auto: "neutral",
   signer_corrected: "neutral",
@@ -1909,6 +1910,8 @@ function buildTimelineDescription(event: AuditEventRecord): string {
       return "Deadline passed before everyone signed";
     case "signer_corrected":
       return describeSignerCorrectedEvent(event.metadata);
+    case "link_shared":
+      return `Signing link copied by the sender for ${targetLabel}`;
     default:
       return event.event;
   }

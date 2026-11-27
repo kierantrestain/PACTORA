@@ -21,6 +21,7 @@ import {
   formatContractAmountInput,
 } from "./schemas/agreement.ts";
 import { createEmailService, type EmailService } from "./services/email.ts";
+import { recordSystemAuditEvent } from "./services/system-audit.ts";
 import { resolveAppUrl } from "./utils/env.ts";
 
 // Agreements: completed envelopes, looked at as the contracts they are.
@@ -815,6 +816,22 @@ export async function updateAgreementRecord(
         userId,
       ],
     );
+
+    // In the same transaction as the change, so the trail and the record
+    // cannot disagree.
+    const changes = describeAgreementChanges(current, next);
+
+    if (Object.keys(changes).length > 0) {
+      await recordSystemAuditEvent(
+        {
+          actorUserId: userId,
+          createdAt: now,
+          event: "agreement_metadata_changed",
+          metadata: { changes, envelopeId },
+        },
+        tx,
+      );
+    }
   }, database);
 
   const [saved] = await queryAgreements(
@@ -832,6 +849,46 @@ export async function updateAgreementRecord(
   }
 
   return saved;
+}
+
+const AUDITED_AGREEMENT_FIELDS = [
+  "counterparty",
+  "contractValueCents",
+  "currency",
+  "effectiveDate",
+  "endDate",
+  "renewalNoticeDays",
+  "autoRenews",
+  "tags",
+  "notes",
+] as const satisfies ReadonlyArray<keyof AgreementDetails>;
+
+/**
+ * What changed between two versions of an agreement's details, for the
+ * audit trail. Notes are free text and may hold anything, so the trail says
+ * that they changed, not what they say.
+ */
+export function describeAgreementChanges(
+  before: AgreementDetails | null,
+  after: AgreementDetails,
+): Record<string, { from: unknown; to: unknown }> {
+  const changes: Record<string, { from: unknown; to: unknown }> = {};
+
+  for (const field of AUDITED_AGREEMENT_FIELDS) {
+    const from = before ? before[field] : null;
+    const to = after[field];
+
+    if (JSON.stringify(from) === JSON.stringify(to)) {
+      continue;
+    }
+
+    changes[field] =
+      field === "notes"
+        ? { from: from ? "(text)" : null, to: to ? "(text)" : null }
+        : { from, to };
+  }
+
+  return changes;
 }
 
 /** What is stored, or the defaults, with every field the change names. */

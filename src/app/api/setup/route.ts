@@ -4,7 +4,6 @@ import { NextResponse } from "next/server";
 import { getAuth, getAuthSessionFromHeaders } from "@/lib/auth/server";
 import { runAsSetup } from "@/lib/auth/setup-context";
 import { addEmailDomain } from "@/lib/email-status";
-import { rejectBots } from "@/lib/security/botid";
 import { logRouteError, logSecurityEvent } from "@/lib/security/logging";
 import {
   applyRateLimit,
@@ -104,12 +103,6 @@ export async function POST(request: Request) {
 
   if (rateLimitResponse) {
     return rateLimitResponse;
-  }
-
-  const botResponse = await rejectBots(request);
-
-  if (botResponse) {
-    return botResponse;
   }
 
   // A page on another site can make a browser send a form here, but it

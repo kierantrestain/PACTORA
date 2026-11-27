@@ -1,7 +1,6 @@
 import { toNextJsHandler } from "better-auth/next-js";
 
 import { getAuth } from "@/lib/auth/server";
-import { rejectBots } from "@/lib/security/botid";
 
 type AuthHandlers = ReturnType<typeof toNextJsHandler>;
 
@@ -28,9 +27,7 @@ export function PATCH(request: Request) {
 }
 
 export async function POST(request: Request) {
-  // Sign-in, sign-up and the routes that send email are checked by BotID
-  // first, where that is turned on.
-  return (await rejectBots(request)) ?? getHandlers().POST(request);
+  return getHandlers().POST(request);
 }
 
 export function PUT(request: Request) {

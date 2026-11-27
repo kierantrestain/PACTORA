@@ -754,3 +754,66 @@ test("the database refuses details the schema would", async () => {
     /agreement_records_end_after_effective/,
   );
 });
+
+test("each change to an agreement's details is written to the audit trail", async () => {
+  const envelopeId = await createEnvelope(owner.id, "completed", "Audited");
+  const readTrail = async () =>
+    (
+      await database.query<{
+        actor_user_id: string;
+        metadata: {
+          changes: Record<string, { from: unknown; to: unknown }>;
+          envelopeId: string;
+        };
+      }>(
+        `select actor_user_id, metadata from public.system_audit_events
+         where event = 'agreement_metadata_changed'
+           and metadata->>'envelopeId' = $1
+         order by sequence`,
+        [envelopeId],
+      )
+    ).rows;
+
+  await updateAgreementRecord(
+    owner.id,
+    envelopeId,
+    { counterparty: "Northwind Ltd", notes: "Private negotiation notes" },
+    database,
+  );
+  await updateAgreementRecord(
+    owner.id,
+    envelopeId,
+    { counterparty: "Northwind Group" },
+    database,
+  );
+  // Saving the same values again changes nothing and records nothing.
+  await updateAgreementRecord(
+    owner.id,
+    envelopeId,
+    { counterparty: "Northwind Group" },
+    database,
+  );
+
+  const trail = await readTrail();
+
+  assert.equal(trail.length, 2);
+  assert.equal(trail[0]!.actor_user_id, owner.id);
+  assert.deepEqual(trail[0]!.metadata.changes.counterparty, {
+    from: null,
+    to: "Northwind Ltd",
+  });
+  // The trail says notes changed without copying what they say.
+  assert.deepEqual(trail[0]!.metadata.changes.notes, {
+    from: null,
+    to: "(text)",
+  });
+  assert.deepEqual(trail[1]!.metadata.changes, {
+    counterparty: { from: "Northwind Ltd", to: "Northwind Group" },
+  });
+
+  // A refused change leaves no trail.
+  await assert.rejects(
+    updateAgreementRecord(teammate.id, envelopeId, { notes: "x" }, database),
+  );
+  assert.equal((await readTrail()).length, 2);
+});

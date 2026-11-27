@@ -5,6 +5,7 @@ import {
   ClockIcon,
   DownloadIcon,
   FileTextIcon,
+  LinkIcon,
   MinusIcon,
   PencilIcon,
   XIcon,
@@ -162,6 +163,14 @@ export function EnvelopeDetailShell({
   const isOwnEnvelope = ownerLabel === undefined;
   const [activeModal, setActiveModal] = useState<ModalState>(null);
   const [actionError, setActionError] = useState<string | null>(null);
+  // A signing link the sender copied to share by hand, shown until they
+  // leave: a browser that refused the clipboard still lets them copy it.
+  const [sharedLink, setSharedLink] = useState<{
+    copied: boolean;
+    signerId: string;
+    url: string;
+  } | null>(null);
+  const [sharingSignerId, setSharingSignerId] = useState<string | null>(null);
   const [isChangingDeadline, setIsChangingDeadline] = useState(false);
   const [isChangingReminders, setIsChangingReminders] = useState(false);
   const [isCopyingDraft, setIsCopyingDraft] = useState(false);
@@ -310,6 +319,44 @@ export function EnvelopeDetailShell({
       setActionError(payload?.error ?? "Unable to send a reminder right now.");
     } finally {
       setIsSendingReminder(false);
+    }
+  }
+
+  async function handleCopySigningLink(signer: EnvelopeDetailSigner) {
+    setActionError(null);
+    setSharingSignerId(signer.id);
+
+    try {
+      const response = await fetch(
+        `/api/envelopes/${encodeURIComponent(envelopeId)}/signers/${encodeURIComponent(signer.id)}/link`,
+        { method: "POST" },
+      );
+      const payload = (await response.json().catch(() => null)) as {
+        error?: string;
+        url?: string;
+      } | null;
+
+      if (!response.ok || !payload?.url) {
+        setActionError(
+          payload?.error ?? "The signing link could not be created.",
+        );
+        return;
+      }
+
+      let copied = false;
+
+      try {
+        await navigator.clipboard.writeText(payload.url);
+        copied = true;
+      } catch {
+        copied = false;
+      }
+
+      setSharedLink({ copied, signerId: signer.id, url: payload.url });
+    } catch {
+      setActionError("The signing link could not be created.");
+    } finally {
+      setSharingSignerId(null);
     }
   }
 
@@ -978,8 +1025,45 @@ export function EnvelopeDetailShell({
                               Change
                             </button>
                           ) : null}
+                          {isOwnEnvelope &&
+                          activeRecord.status === "sent" &&
+                          signer.status === "waiting" ? (
+                            <button
+                              className="btn-quiet inline-flex items-center gap-1.5"
+                              disabled={sharingSignerId === signer.id}
+                              onClick={() => {
+                                void handleCopySigningLink(signer);
+                              }}
+                              type="button"
+                            >
+                              <LinkIcon
+                                aria-hidden="true"
+                                className="size-3.5"
+                                strokeWidth={2.4}
+                              />
+                              {sharingSignerId === signer.id
+                                ? "Creating link…"
+                                : "Copy signing link"}
+                            </button>
+                          ) : null}
                         </div>
                       </div>
+                      {sharedLink?.signerId === signer.id ? (
+                        <div className="notice mt-3 text-sm" role="status">
+                          <p>
+                            {sharedLink.copied
+                              ? "Link copied. Send it to this signer yourself; the previous link no longer works."
+                              : "Copy this link and send it to this signer yourself; the previous link no longer works."}
+                          </p>
+                          <input
+                            aria-label="Signing link"
+                            className="mt-2 w-full rounded-md border border-(--border) bg-transparent px-2 py-1.5 font-mono text-xs"
+                            onFocus={(event) => event.currentTarget.select()}
+                            readOnly
+                            value={sharedLink.url}
+                          />
+                        </div>
+                      ) : null}
 
                       <p className="mt-2 text-sm leading-6 text-(--secondary)">
                         {signer.metaLabel}

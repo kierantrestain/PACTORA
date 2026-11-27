@@ -4,7 +4,6 @@ import {
   ContactSubmissionError,
   submitPublicContactMessage,
 } from "@/lib/contact";
-import { rejectBots } from "@/lib/security/botid";
 import { logRouteError, logSecurityEvent } from "@/lib/security/logging";
 import {
   applyRateLimit,
@@ -39,12 +38,6 @@ export async function POST(request: Request) {
 
   if (rateLimitResponse) {
     return rateLimitResponse;
-  }
-
-  const botResponse = await rejectBots(request);
-
-  if (botResponse) {
-    return botResponse;
   }
 
   const payload = (await request.json().catch(() => null)) as Record<
