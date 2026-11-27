@@ -25,7 +25,7 @@ test("a starter document becomes a draft envelope ready to send", async ({
   await expect(page.getByLabel("Document title")).toHaveValue("Sales proposal");
 
   // Not ready: the variables are empty and the editor says which.
-  await expect(page.getByText(/Fill in \{\{company\.name\}\}/)).toBeVisible();
+  await expect(page.getByText(/^Fill in .*\{\{company\.name\}\}/)).toBeVisible();
 
   for (const [name, value] of [
     ["Your company", "Northwind Studio"],
@@ -33,7 +33,7 @@ test("a starter document becomes a draft envelope ready to send", async ({
     ["Client contact", "Casey Client"],
     ["Quote valid until", "31 December 2026"],
   ] as const) {
-    await page.getByLabel(`Value of ${name}`).fill(value);
+    await page.getByLabel(`Value of ${name}`, { exact: true }).fill(value);
   }
 
   await expect(page.getByText("Every variable has a value")).toBeVisible();
