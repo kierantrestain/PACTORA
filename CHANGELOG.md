@@ -8,6 +8,29 @@ release says when it does.
 
 ## [Unreleased]
 
+## [1.1.0] - 2026-11-27 (PACTORA)
+
+### Added
+
+- Sign-up with only a name, email and password; token-free first owner on protected or local installs; owner provisioning for public ones.
+- Getting Started checklist, workspace invitations UI, sectioned Settings with search.
+- Universal email engine: mailbox routing by explicit authorisation, delivery history, idempotency, encrypted retries and a retry job (`/api/internal/email`).
+- Settings, Email & Integrations: Gmail, Google Workspace, Microsoft 365, Outlook (OAuth, send-only), Zoho, Yahoo, iCloud, custom SMTP, optional Resend; editable email wording.
+- Docker image and `docker-compose.selfhost.yml`; `/api/health`.
+
+### Changed
+
+- The setup page now leads to sign-up. Technical email and domain settings moved to Advanced Administration.
+- Signer data exports and erasure, and closed-account purges, include the email delivery log.
+
+### Removed
+
+- Vercel BotID.
+
+### Migration
+
+- One additive migration, `20261128100000_email_accounts.sql`, applied by `npm run db:migrate` (and by the Vercel build).
+
 ## [0.9.2] - 2026-11-26
 
 Eleven bug fixes reported by @coygeek across authentication, email

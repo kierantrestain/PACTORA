@@ -56,10 +56,21 @@ const page = await desktop.newPage();
 await page.goto("/signup");
 await shoot(page, "desktop-signup");
 await page.waitForLoadState("networkidle");
-await page.getByLabel("Full name").fill("Ada Owner");
-await page.getByLabel("Email address").fill(email);
-await page.getByLabel("Password", { exact: true }).fill(password);
-await page.getByRole("button", { name: "Create account" }).click();
+
+if (process.env.SHOT_EMAIL) {
+  // An install that already has its owner: sign in as them.
+  await page.goto("/login");
+  await page.waitForLoadState("networkidle");
+  await page.getByLabel("Email address").fill(email);
+  await page.getByLabel("Password", { exact: true }).fill(password);
+  await page.getByRole("button", { name: "Sign in" }).click();
+} else {
+  await page.getByLabel("Full name").fill("Ada Owner");
+  await page.getByLabel("Email address").fill(email);
+  await page.getByLabel("Password", { exact: true }).fill(password);
+  await page.getByRole("button", { name: "Create account" }).click();
+}
+
 await page.waitForURL(/\/dashboard/);
 
 for (const [name, url] of pages) {
