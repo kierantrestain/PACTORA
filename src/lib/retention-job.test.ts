@@ -755,6 +755,21 @@ test("closed-account purge with working storage removes files on the first run a
 
     assert.equal(outcome.status, "ran");
     assert.equal(retentionJobFailed(outcome), false);
+    // The renewal reminders ran last and found nothing due.
+    assert.deepEqual(outcome.renewals, {
+      failures: [],
+      remindersSent: 0,
+      stoppedEarly: false,
+    });
+    // Had they failed, the run would still count as a success.
+    assert.equal(retentionJobFailed({ ...outcome, renewals: null }), false);
+    assert.equal(
+      retentionJobFailed({
+        ...outcome,
+        renewals: { failures: ["env-1"], remindersSent: 0, stoppedEarly: true },
+      }),
+      false,
+    );
     assert.equal(outcome.summary.accountsPurged, 1);
     assert.deepEqual(outcome.summary.accountPurgeFailures, []);
     assert.deepEqual(outcome.summary.pendingFileDeletionFailures, []);

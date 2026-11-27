@@ -129,6 +129,7 @@ export const emailTemplateKinds = [
   "retention_notice",
   "deletion_notice",
   "expiry_notice",
+  "renewal_reminder",
   "test_email",
   "signing_lock_alert",
 ] as const;

@@ -678,6 +678,12 @@ export function EnvelopeDetailShell({
             {activeRecord.status === "completed" ? (
               <>
                 <ShellButton
+                  href={`/agreements?envelope=${encodeURIComponent(envelopeId)}`}
+                  variant="secondary"
+                >
+                  Agreement details
+                </ShellButton>
+                <ShellButton
                   onClick={() => handleDownload("evidence")}
                   variant="secondary"
                 >

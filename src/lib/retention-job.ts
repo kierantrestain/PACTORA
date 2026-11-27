@@ -1,5 +1,9 @@
 import { createHash, timingSafeEqual } from "node:crypto";
 
+import {
+  type RenewalReminderSummary,
+  sendDueRenewalReminders,
+} from "./agreements.ts";
 import { deleteExpiredIdempotencyKeys } from "./api/idempotency.ts";
 import { getDb, type DbPool } from "./db/connection.ts";
 import { deleteOldWebhookDeliveries } from "./webhooks/log.ts";
@@ -24,8 +28,9 @@ import { getEnv, type EnvSource } from "./utils/env.ts";
 
 // The daily job. First the cleanup: stale drafts, queued account deletions,
 // expired download links and finished rate limit windows. Then the
-// deletions administrators scheduled (envelope-deletion.ts), and the
-// envelopes that are out for signature (envelope-schedule.ts).
+// deletions administrators scheduled (envelope-deletion.ts), the
+// envelopes that are out for signature (envelope-schedule.ts), and last
+// the renewal reminders for agreements (agreements.ts).
 //
 // On Vercel it is called by a cron job (see vercel.json). A click-to-deploy
 // install has no secret for that call, because nobody typed one in, so the
@@ -48,6 +53,12 @@ export type RetentionJobOutcome =
   | {
       /** Null when that part could not run. The cleanup still counts. */
       deletions: ScheduledDeletionSummary | null;
+      /**
+       * Null when that part could not run. Reported, but never what makes
+       * a run count as failed: a reminder that did not go out is still due
+       * on the next run.
+       */
+      renewals: RenewalReminderSummary | null;
       /** Null when that part could not run. The cleanup still counts. */
       schedule: EnvelopeScheduleSummary | null;
       status: "ran";
@@ -228,7 +239,21 @@ export async function runRetentionJob({
       };
     });
 
-    return { deletions, schedule, status: "ran", summary };
+    // Last, and on its own: nothing about agreements may hold up or fail
+    // the work above.
+    const renewals = await sendDueRenewalReminders(database, undefined, {
+      emailService,
+    }).catch((error: unknown) => {
+      // A database from before agreements has none to remind about.
+      if (!isMissingSchemaError(error)) {
+        console.error("The agreement renewal reminders failed:", error);
+        return null;
+      }
+
+      return { failures: [], remindersSent: 0, stoppedEarly: false };
+    });
+
+    return { deletions, renewals, schedule, status: "ran", summary };
   } finally {
     await lockClient.query("rollback").catch(() => undefined);
     lockClient.release();
