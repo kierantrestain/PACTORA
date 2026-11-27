@@ -1,0 +1,3686 @@
+diff --git a/db/migrations/20261128100000_email_accounts.sql b/db/migrations/20261128100000_email_accounts.sql
+new file mode 100644
+index 0000000..d2fd18c
+--- /dev/null
++++ b/db/migrations/20261128100000_email_accounts.sql
+@@ -0,0 +1,176 @@
++-- Email accounts: the mailboxes PACTORA sends through (PACTORA 1.1).
++--
++-- * email_accounts: a connected mailbox. An organisation account belongs to
++--   the workspace and is managed by administrators; a personal account
++--   belongs to one person and only they can see or use it. Credentials
++--   (passwords, API keys, OAuth tokens) are stored encrypted with
++--   AES-256-GCM (src/lib/email/crypto.ts); the SMTP host, port, security
++--   and user name are not secret and are kept in the clear.
++-- * email_account_teams: the teams an organisation account is shared with,
++--   when it is shared with teams.
++-- * email_account_preferences: the account a person prefers to send their
++--   agreements through.
++-- * email_oauth_states: a pending Google or Microsoft connection. Single
++--   use, ten minutes, bound to the person who started it. The PKCE
++--   verifier is encrypted; the state itself is kept only as a hash.
++-- * email_deliveries: every message sent or attempted, for idempotency,
++--   retries and the delivery log. A pending retry's message is stored
++--   encrypted and erased once it is sent or given up. envelope_id and
++--   sender_user_id carry no foreign key on purpose: a send happens while
++--   the envelope's row may be locked by the transaction that sends it, and
++--   the log outlives deleted envelopes.
++-- * email_templates: an organisation's own subject and opening paragraph
++--   for some messages. Links and legal text are never editable.
++--
++-- Timestamps are unix seconds, as everywhere else.
++
++create table if not exists public.email_accounts (
++  id text primary key,
++  scope text not null check (scope in ('organization', 'personal')),
++  owner_user_id text references public."user"(id) on delete cascade,
++  created_by_user_id text references public."user"(id) on delete set null,
++  provider text not null check (provider in ('gmail', 'microsoft', 'smtp', 'resend')),
++  preset_id text not null check (
++    preset_id in (
++      'gmail', 'google_workspace', 'microsoft365', 'outlook', 'zoho',
++      'yahoo', 'icloud', 'smtp', 'resend'
++    )
++  ),
++  email_address text not null check (length(email_address) between 3 and 320),
++  display_name text check (display_name is null or length(display_name) <= 120),
++  reply_to text check (reply_to is null or length(reply_to) <= 320),
++  status text not null default 'connected'
++    check (status in ('connected', 'needs_reconnect', 'error')),
++  encrypted_credentials text not null,
++  smtp_host text,
++  smtp_port integer check (smtp_port is null or smtp_port in (25, 465, 587, 2525)),
++  smtp_security text check (smtp_security is null or smtp_security in ('tls', 'starttls')),
++  smtp_username text,
++  provider_account_id text,
++  oauth_scope text,
++  daily_limit integer check (daily_limit is null or daily_limit > 0),
++  is_default boolean not null default false,
++  shared_with text not null default 'nobody'
++    check (shared_with in ('nobody', 'everyone', 'teams')),
++  last_success_at bigint,
++  last_error text,
++  last_error_at bigint,
++  created_at bigint not null,
++  updated_at bigint not null,
++  check ((scope = 'personal') = (owner_user_id is not null)),
++  check (scope = 'organization' or (not is_default and shared_with = 'nobody'))
++);
++
++-- One default organisation account at most.
++create unique index if not exists email_accounts_one_default
++  on public.email_accounts ((true))
++  where is_default;
++
++-- The same mailbox is connected once per owner.
++create unique index if not exists email_accounts_personal_mailbox
++  on public.email_accounts (owner_user_id, provider, lower(email_address))
++  where scope = 'personal';
++
++create unique index if not exists email_accounts_organization_mailbox
++  on public.email_accounts (provider, lower(email_address))
++  where scope = 'organization';
++
++create index if not exists email_accounts_owner_idx
++  on public.email_accounts (owner_user_id)
++  where owner_user_id is not null;
++
++create table if not exists public.email_account_teams (
++  account_id text not null references public.email_accounts(id) on delete cascade,
++  team_id text not null references public.teams(id) on delete cascade,
++  primary key (account_id, team_id)
++);
++
++create index if not exists email_account_teams_team_idx
++  on public.email_account_teams (team_id);
++
++create table if not exists public.email_account_preferences (
++  user_id text primary key references public."user"(id) on delete cascade,
++  account_id text not null references public.email_accounts(id) on delete cascade,
++  updated_at bigint not null
++);
++
++create index if not exists email_account_preferences_account_idx
++  on public.email_account_preferences (account_id);
++
++create table if not exists public.email_oauth_states (
++  state_hash text primary key,
++  user_id text not null references public."user"(id) on delete cascade,
++  preset_id text not null,
++  scope text not null check (scope in ('organization', 'personal')),
++  reconnect_account_id text references public.email_accounts(id) on delete cascade,
++  encrypted_verifier text not null,
++  created_at bigint not null,
++  expires_at bigint not null,
++  consumed_at bigint
++);
++
++create index if not exists email_oauth_states_expiry_idx
++  on public.email_oauth_states (expires_at);
++
++create table if not exists public.email_deliveries (
++  id text primary key,
++  idempotency_key text,
++  stream text not null check (stream in ('platform', 'agreement')),
++  account_id text references public.email_accounts(id) on delete set null,
++  account_email text,
++  provider text,
++  template text not null,
++  to_address text not null,
++  subject text not null,
++  envelope_id text,
++  sender_user_id text,
++  status text not null check (
++    status in ('sending', 'sent', 'failed', 'retrying', 'deferred', 'superseded')
++  ),
++  attempts integer not null default 0,
++  next_attempt_at bigint,
++  locked_until bigint,
++  last_error text,
++  recovery text,
++  provider_message_id text,
++  encrypted_payload text,
++  created_at bigint not null,
++  updated_at bigint not null,
++  sent_at bigint
++);
++
++create unique index if not exists email_deliveries_idempotency_key
++  on public.email_deliveries (idempotency_key)
++  where idempotency_key is not null;
++
++create index if not exists email_deliveries_due_idx
++  on public.email_deliveries (next_attempt_at)
++  where status in ('retrying', 'deferred');
++
++-- Counting what an account sent in the last day, for its sending limit.
++create index if not exists email_deliveries_account_sent_idx
++  on public.email_deliveries (account_id, sent_at)
++  where status = 'sent';
++
++create index if not exists email_deliveries_envelope_idx
++  on public.email_deliveries (envelope_id, to_address)
++  where envelope_id is not null;
++
++create index if not exists email_deliveries_sender_idx
++  on public.email_deliveries (sender_user_id, created_at desc, id);
++
++create index if not exists email_deliveries_created_idx
++  on public.email_deliveries (created_at desc, id);
++
++create table if not exists public.email_templates (
++  kind text primary key check (
++    kind in (
++      'signing_invitation', 'automatic_reminder', 'manual_nudge',
++      'completion_notification', 'workspace_invitation'
++    )
++  ),
++  subject text not null check (length(subject) between 1 and 200),
++  intro text not null check (length(intro) between 1 and 2000),
++  updated_by_user_id text references public."user"(id) on delete set null,
++  updated_at bigint not null
++);
+diff --git a/package-lock.json b/package-lock.json
+index 0f906bd..0d4fab1 100644
+--- a/package-lock.json
++++ b/package-lock.json
+@@ -6,7 +6,7 @@
+   "packages": {
+     "": {
+       "name": "pactora",
+-      "version": "0.9.2",
++      "version": "1.0.0-rc.1",
+       "license": "MIT",
+       "dependencies": {
+         "@pdf-lib/fontkit": "^1.1.1",
+@@ -24,6 +24,7 @@
+         "lucide-react": "^0.577.0",
+         "next": "16.4.6",
+         "node-forge": "1.4.3",
++        "nodemailer": "^10.6.1",
+         "pdf-lib": "^1.17.1",
+         "pdfjs-dist": "5.5.207",
+         "pg": "^8.23.1",
+@@ -46,7 +47,9 @@
+         "@types/react-dom": "^19.3.0",
+         "eslint": "^9",
+         "eslint-config-next": "16.4.6",
++        "mailparser": "^3.15.0",
+         "prettier": "^3.10.0",
++        "smtp-server": "^3.21.7",
+         "tailwindcss": "^4.3.5",
+         "typescript": "^5"
+       },
+@@ -3360,6 +3363,23 @@
+       "dev": true,
+       "license": "MIT"
+     },
++    "node_modules/@selderee/plugin-htmlparser2": {
++      "version": "0.12.0",
++      "resolved": "https://registry.npmjs.org/@selderee/plugin-htmlparser2/-/plugin-htmlparser2-0.12.0.tgz",
++      "integrity": "sha512-oELmoyA6ML9jDRMV3kgcMQFKxUfBU0yFVn6yTctVaLT5ygXnxH52I3TZEgV9EhXJC68/uFvE5Daj1/25c0Xa/A==",
++      "dev": true,
++      "license": "MIT",
++      "dependencies": {
++        "domelementtype": "~2.3.0",
++        "domhandler": "~5.0.3"
++      },
++      "funding": {
++        "url": "https://github.com/sponsors/KillyMXI"
++      },
++      "peerDependencies": {
++        "selderee": "~0.12.0"
++      }
++    },
+     "node_modules/@signpdf/placeholder-pdf-lib": {
+       "version": "3.3.0",
+       "resolved": "https://registry.npmjs.org/@signpdf/placeholder-pdf-lib/-/placeholder-pdf-lib-3.3.0.tgz",
+@@ -4604,6 +4624,21 @@
+         "url": "https://github.com/sponsors/panva"
+       }
+     },
++    "node_modules/@zone-eu/mailsplit": {
++      "version": "5.4.31",
++      "resolved": "https://registry.npmjs.org/@zone-eu/mailsplit/-/mailsplit-5.4.31.tgz",
++      "integrity": "sha512-P031SeyobwXE/aZf1f/hN9RZm/t8ZSibCUYA7Us6Fory4b1p5HxNEA08YcfTynkPnvJ3nFjMFguwSp30TXc4Tw==",
++      "dev": true,
++      "license": "(MIT OR EUPL-1.1+)",
++      "dependencies": {
++        "libbase64": "1.4.1",
++        "libmime": "5.6.5",
++        "libqp": "3.0.2"
++      },
++      "engines": {
++        "node": ">=20.0.0"
++      }
++    },
+     "node_modules/acorn": {
+       "version": "8.19.0",
+       "resolved": "https://registry.npmjs.org/acorn/-/acorn-8.19.0.tgz",
+@@ -5391,6 +5426,26 @@
+       "dev": true,
+       "license": "MIT"
+     },
++    "node_modules/deepmerge-ts": {
++      "version": "8.0.2",
++      "resolved": "https://registry.npmjs.org/deepmerge-ts/-/deepmerge-ts-8.0.2.tgz",
++      "integrity": "sha512-uqbvqLUMrc6p0MO+WBRtTxY55hmyh94WRwI5a++PZe54X+bfVh59FSN7uWCBCW1CCVjzjnrwzfI8zidE2obMMw==",
++      "dev": true,
++      "funding": [
++        {
++          "type": "ko-fi",
++          "url": "https://ko-fi.com/rebeccastevens"
++        },
++        {
++          "type": "tidelift",
++          "url": "https://tidelift.com/funding/github/npm/deepmerge-ts"
++        }
++      ],
++      "license": "BSD-3-Clause",
++      "engines": {
++        "node": ">=16.9.0"
++      }
++    },
+     "node_modules/define-data-property": {
+       "version": "1.1.4",
+       "resolved": "https://registry.npmjs.org/define-data-property/-/define-data-property-1.1.4.tgz",
+@@ -5462,6 +5517,65 @@
+         "node": ">=0.10.0"
+       }
+     },
++    "node_modules/dom-serializer": {
++      "version": "2.0.0",
++      "resolved": "https://registry.npmjs.org/dom-serializer/-/dom-serializer-2.0.0.tgz",
++      "integrity": "sha512-wIkAryiqt/nV5EQKqQpo3SToSOV9J0DnbJqwK7Wv/Trc92zIAYZ4FlMu+JPFW1DfGFt81ZTCGgDEabffXeLyJg==",
++      "dev": true,
++      "license": "MIT",
++      "dependencies": {
++        "domelementtype": "^2.3.0",
++        "domhandler": "^5.0.2",
++        "entities": "^4.2.0"
++      },
++      "funding": {
++        "url": "https://github.com/cheeriojs/dom-serializer?sponsor=1"
++      }
++    },
++    "node_modules/domelementtype": {
++      "version": "2.3.0",
++      "resolved": "https://registry.npmjs.org/domelementtype/-/domelementtype-2.3.0.tgz",
++      "integrity": "sha512-OLETBj6w0OsagBwdXnPdN0cnMfF9opN69co+7ZrbfPGrdpPVNBUj02spi6B1N7wChLQiPn4CSH/zJvXw56gmHw==",
++      "dev": true,
++      "funding": [
++        {
++          "type": "github",
++          "url": "https://github.com/sponsors/fb55"
++        }
++      ],
++      "license": "BSD-2-Clause"
++    },
++    "node_modules/domhandler": {
++      "version": "5.0.3",
++      "resolved": "https://registry.npmjs.org/domhandler/-/domhandler-5.0.3.tgz",
++      "integrity": "sha512-cgwlv/1iFQiFnU96XXgROh8xTeetsnJiDsTc7TYCLFd9+/WNkIqPTxiM/8pSd8VIrhXGTf1Ny1q1hquVqDJB5w==",
++      "dev": true,
++      "license": "BSD-2-Clause",
++      "dependencies": {
++        "domelementtype": "^2.3.0"
++      },
++      "engines": {
++        "node": ">= 4"
++      },
++      "funding": {
++        "url": "https://github.com/fb55/domhandler?sponsor=1"
++      }
++    },
++    "node_modules/domutils": {
++      "version": "3.2.2",
++      "resolved": "https://registry.npmjs.org/domutils/-/domutils-3.2.2.tgz",
++      "integrity": "sha512-6kZKyUajlDuqlHKVX1w7gyslj9MPIXzIFiz/rGu35uC1wMi+kMhQwGhl4lt9unC9Vb9INnY9Z3/ZA3+FhASLaw==",
++      "dev": true,
++      "license": "BSD-2-Clause",
++      "dependencies": {
++        "dom-serializer": "^2.0.0",
++        "domelementtype": "^2.3.0",
++        "domhandler": "^5.0.3"
++      },
++      "funding": {
++        "url": "https://github.com/fb55/domutils?sponsor=1"
++      }
++    },
+     "node_modules/dunder-proto": {
+       "version": "1.0.1",
+       "resolved": "https://registry.npmjs.org/dunder-proto/-/dunder-proto-1.0.1.tgz",
+@@ -5491,6 +5605,16 @@
+       "dev": true,
+       "license": "MIT"
+     },
++    "node_modules/encoding-japanese": {
++      "version": "2.5.0",
++      "resolved": "https://registry.npmjs.org/encoding-japanese/-/encoding-japanese-2.5.0.tgz",
++      "integrity": "sha512-5TKhaMWTUF777NQ16OrAkJFuEd1uOnEBw8ODeXFTc/Y9csZZQ6/jiIS5r4aFuzfowu9gLGrE51zqI2H0dLwlmg==",
++      "dev": true,
++      "license": "MIT",
++      "engines": {
++        "node": ">=18.0.0"
++      }
++    },
+     "node_modules/enhanced-resolve": {
+       "version": "5.26.1",
+       "resolved": "https://registry.npmjs.org/enhanced-resolve/-/enhanced-resolve-5.26.1.tgz",
+@@ -5505,6 +5629,19 @@
+         "node": ">=10.13.0"
+       }
+     },
++    "node_modules/entities": {
++      "version": "4.5.0",
++      "resolved": "https://registry.npmjs.org/entities/-/entities-4.5.0.tgz",
++      "integrity": "sha512-V0hjH4dGPh9Ao5p0MoRY6BVqtwCjhz6vI5LT8AJ55H+4g9/4vbHx1I54fS0XuclLhDHArPQCiMjDxjaL8fPxhw==",
++      "dev": true,
++      "license": "BSD-2-Clause",
++      "engines": {
++        "node": ">=0.12"
++      },
++      "funding": {
++        "url": "https://github.com/fb55/entities?sponsor=1"
++      }
++    },
+     "node_modules/es-abstract": {
+       "version": "1.24.1",
+       "resolved": "https://registry.npmjs.org/es-abstract/-/es-abstract-1.24.1.tgz",
+@@ -6622,6 +6759,16 @@
+         "node": ">= 0.4"
+       }
+     },
++    "node_modules/he": {
++      "version": "1.2.0",
++      "resolved": "https://registry.npmjs.org/he/-/he-1.2.0.tgz",
++      "integrity": "sha512-F/1DnUGPopORZi0ni+CvrCgHQ5FyEAHRLSApuYWMmrbSwoN2Mn/7k+Gl38gJnR7yyDZk6WLXwiGod1JOWNDKGw==",
++      "dev": true,
++      "license": "MIT",
++      "bin": {
++        "he": "bin/he"
++      }
++    },
+     "node_modules/hermes-estree": {
+       "version": "0.25.1",
+       "resolved": "https://registry.npmjs.org/hermes-estree/-/hermes-estree-0.25.1.tgz",
+@@ -6639,6 +6786,59 @@
+         "hermes-estree": "0.25.1"
+       }
+     },
++    "node_modules/html-to-text": {
++      "version": "10.0.1",
++      "resolved": "https://registry.npmjs.org/html-to-text/-/html-to-text-10.0.1.tgz",
++      "integrity": "sha512-GiVhRI1BatGARSCmlXWNCjDT0cWrwBWoeduLoV0WSKAgaV/wa+hUWy5LiQLUs4UwiUrE52ZCMfBGiKD87TDPrg==",
++      "dev": true,
++      "license": "MIT",
++      "dependencies": {
++        "@selderee/plugin-htmlparser2": "~0.12.0",
++        "deepmerge-ts": "^8.0.1",
++        "dom-serializer": "^2.0.0",
++        "htmlparser2": "^10.1.0",
++        "selderee": "~0.12.0"
++      },
++      "engines": {
++        "node": ">=20.19.0"
++      },
++      "funding": {
++        "url": "https://github.com/sponsors/KillyMXI"
++      }
++    },
++    "node_modules/htmlparser2": {
++      "version": "10.1.0",
++      "resolved": "https://registry.npmjs.org/htmlparser2/-/htmlparser2-10.1.0.tgz",
++      "integrity": "sha512-VTZkM9GWRAtEpveh7MSF6SjjrpNVNNVJfFup7xTY3UpFtm67foy9HDVXneLtFVt4pMz5kZtgNcvCniNFb1hlEQ==",
++      "dev": true,
++      "funding": [
++        "https://github.com/fb55/htmlparser2?sponsor=1",
++        {
++          "type": "github",
++          "url": "https://github.com/sponsors/fb55"
++        }
++      ],
++      "license": "MIT",
++      "dependencies": {
++        "domelementtype": "^2.3.0",
++        "domhandler": "^5.0.3",
++        "domutils": "^3.2.2",
++        "entities": "^7.0.1"
++      }
++    },
++    "node_modules/htmlparser2/node_modules/entities": {
++      "version": "7.0.1",
++      "resolved": "https://registry.npmjs.org/entities/-/entities-7.0.1.tgz",
++      "integrity": "sha512-TWrgLOFUQTH994YUyl1yT4uyavY5nNB5muff+RtWaqNVCAK408b5ZnnbNAUEWLTCpum9w6arT70i1XdQ4UeOPA==",
++      "dev": true,
++      "license": "BSD-2-Clause",
++      "engines": {
++        "node": ">=0.12"
++      },
++      "funding": {
++        "url": "https://github.com/fb55/entities?sponsor=1"
++      }
++    },
+     "node_modules/human-signals": {
+       "version": "2.1.0",
+       "resolved": "https://registry.npmjs.org/human-signals/-/human-signals-2.1.0.tgz",
+@@ -7338,6 +7538,16 @@
+         "node": ">=0.10"
+       }
+     },
++    "node_modules/leac": {
++      "version": "0.7.0",
++      "resolved": "https://registry.npmjs.org/leac/-/leac-0.7.0.tgz",
++      "integrity": "sha512-qMrZeyEekgdRQ9o6a4NAB2EQZrv827GJdn1vnapwSJ90hWRB4TzUSunvacPkxQ2TnNqHNI1/zSt0hlo0crG8Jw==",
++      "dev": true,
++      "license": "MIT",
++      "funding": {
++        "url": "https://github.com/sponsors/KillyMXI"
++      }
++    },
+     "node_modules/levn": {
+       "version": "0.4.1",
+       "resolved": "https://registry.npmjs.org/levn/-/levn-0.4.1.tgz",
+@@ -7352,6 +7562,59 @@
+         "node": ">= 0.8.0"
+       }
+     },
++    "node_modules/libbase64": {
++      "version": "1.4.1",
++      "resolved": "https://registry.npmjs.org/libbase64/-/libbase64-1.4.1.tgz",
++      "integrity": "sha512-Nyh3H90B3gRtrcxIe56Ayy7635J0jmh6AbxbQgQae8wrSPQMH5wFqJChiMTB13yKG512L3YspbA5DzumhFTITA==",
++      "dev": true,
++      "license": "MIT",
++      "engines": {
++        "node": ">=20.0.0"
++      }
++    },
++    "node_modules/libmime": {
++      "version": "5.6.5",
++      "resolved": "https://registry.npmjs.org/libmime/-/libmime-5.6.5.tgz",
++      "integrity": "sha512-2mbKYlwUP2mWys7kUE0MBHNdOndOe++8TIdmGXtt/hMYWSgbjHkSIXyC4jCpVSc/sAox3GSxWn1dSmyiQimLNA==",
++      "dev": true,
++      "license": "MIT",
++      "dependencies": {
++        "encoding-japanese": "2.5.0",
++        "iconv-lite": "0.7.3",
++        "libbase64": "1.4.1",
++        "libqp": "3.0.2"
++      },
++      "engines": {
++        "node": ">=20.0.0"
++      }
++    },
++    "node_modules/libmime/node_modules/iconv-lite": {
++      "version": "0.7.3",
++      "resolved": "https://registry.npmjs.org/iconv-lite/-/iconv-lite-0.7.3.tgz",
++      "integrity": "sha512-IKXpvIzjnC9XTAUbVBcMfGS0EPaIXtW6v+zr+RRp+hqULEpo0owZax6wyRwPOJbWbzjYspQwusTsfVr0ifh4uQ==",
++      "dev": true,
++      "license": "MIT",
++      "dependencies": {
++        "safer-buffer": ">= 2.1.2 < 3.0.0"
++      },
++      "engines": {
++        "node": ">=0.10.0"
++      },
++      "funding": {
++        "type": "opencollective",
++        "url": "https://opencollective.com/express"
++      }
++    },
++    "node_modules/libqp": {
++      "version": "3.0.2",
++      "resolved": "https://registry.npmjs.org/libqp/-/libqp-3.0.2.tgz",
++      "integrity": "sha512-24oL5vCMpFd6lGLbD3vPrmcAEGFScDPX9eARY8TXsRVBSde93xP2iG7+8pg5M56Yiu9Uy14hCVN1E+yj5LMtyQ==",
++      "dev": true,
++      "license": "MIT",
++      "engines": {
++        "node": ">=20.0.0"
++      }
++    },
+     "node_modules/lightningcss": {
+       "version": "1.33.0",
+       "resolved": "https://registry.npmjs.org/lightningcss/-/lightningcss-1.33.0.tgz",
+@@ -7625,6 +7888,26 @@
+         "url": "https://opencollective.com/parcel"
+       }
+     },
++    "node_modules/linkify-it": {
++      "version": "6.1.0",
++      "resolved": "https://registry.npmjs.org/linkify-it/-/linkify-it-6.1.0.tgz",
++      "integrity": "sha512-wJ/TwpSDTLepCrQoYWYIExIKg5Zchex2Nn5yk2mFnB+6PtdkHtyLx742md9csRjjOnGkKIS/RrbY7l8D6gT9Vw==",
++      "dev": true,
++      "funding": [
++        {
++          "type": "github",
++          "url": "https://github.com/sponsors/puzrin"
++        },
++        {
++          "type": "github",
++          "url": "https://github.com/sponsors/markdown-it"
++        }
++      ],
++      "license": "MIT",
++      "dependencies": {
++        "uc.micro": "^3.0.0"
++      }
++    },
+     "node_modules/locate-path": {
+       "version": "6.0.0",
+       "resolved": "https://registry.npmjs.org/locate-path/-/locate-path-6.0.0.tgz",
+@@ -7690,6 +7973,26 @@
+         "@jridgewell/sourcemap-codec": "^1.6.0"
+       }
+     },
++    "node_modules/mailparser": {
++      "version": "3.15.0",
++      "resolved": "https://registry.npmjs.org/mailparser/-/mailparser-3.15.0.tgz",
++      "integrity": "sha512-vGKvLx7Hp9GEl0u+C/7V0v+ryYqwUksZSfNTvIqB8MM39AzQ5jrFgSxGXbpU9rVcDkt4hgRDVGneIme9oxLe3A==",
++      "dev": true,
++      "license": "MIT",
++      "dependencies": {
++        "@zone-eu/mailsplit": "5.4.31",
++        "he": "1.2.0",
++        "html-to-text": "10.0.1",
++        "libmime": "5.6.5",
++        "linkify-it": "6.1.0",
++        "nodemailer": "10.6.1",
++        "punycode.js": "2.3.1",
++        "tlds": "1.261.0"
++      },
++      "engines": {
++        "node": ">=20.0.0"
++      }
++    },
+     "node_modules/math-intrinsics": {
+       "version": "1.1.0",
+       "resolved": "https://registry.npmjs.org/math-intrinsics/-/math-intrinsics-1.1.0.tgz",
+@@ -7923,6 +8226,15 @@
+         "node": ">=18"
+       }
+     },
++    "node_modules/nodemailer": {
++      "version": "10.6.1",
++      "resolved": "https://registry.npmjs.org/nodemailer/-/nodemailer-10.6.1.tgz",
++      "integrity": "sha512-d7kfFfS/tR4Aca+SBvRaQ+MXKNv7d2JiRe5TxaRcFT/kYMh4GGPnW9aKksTIEvyEbA7d/7HYWE4YPDEHxzJj/g==",
++      "license": "MIT-0",
++      "engines": {
++        "node": ">=20.0.0"
++      }
++    },
+     "node_modules/npm-run-path": {
+       "version": "4.0.1",
+       "resolved": "https://registry.npmjs.org/npm-run-path/-/npm-run-path-4.0.1.tgz",
+@@ -8169,6 +8481,20 @@
+         "node": ">=6"
+       }
+     },
++    "node_modules/parseley": {
++      "version": "0.13.1",
++      "resolved": "https://registry.npmjs.org/parseley/-/parseley-0.13.1.tgz",
++      "integrity": "sha512-uNBJZzmb60l6p6VWLTmevizNAGnE0xoSf1n0B4q3ntegDNzcS68NRCcBDZTcyXHxt2XhBChsCuqj4M+nChvE/A==",
++      "dev": true,
++      "license": "MIT",
++      "dependencies": {
++        "leac": "^0.7.0",
++        "peberminta": "^0.10.0"
++      },
++      "funding": {
++        "url": "https://github.com/sponsors/KillyMXI"
++      }
++    },
+     "node_modules/path-exists": {
+       "version": "4.0.0",
+       "resolved": "https://registry.npmjs.org/path-exists/-/path-exists-4.0.0.tgz",
+@@ -8226,6 +8552,16 @@
+         "node-readable-to-web-readable-stream": "^0.4.2"
+       }
+     },
++    "node_modules/peberminta": {
++      "version": "0.10.0",
++      "resolved": "https://registry.npmjs.org/peberminta/-/peberminta-0.10.0.tgz",
++      "integrity": "sha512-80B2AsU+I4Qdb0ZAPSfe9UwvGzwkM37IKIFEvdS3D/3Ndgv2bsuJ0bfG1+iEYO+l7Gfd4EUJmuRyq7efLgRMzQ==",
++      "dev": true,
++      "license": "MIT",
++      "funding": {
++        "url": "https://github.com/sponsors/KillyMXI"
++      }
++    },
+     "node_modules/pg": {
+       "version": "8.23.1",
+       "resolved": "https://registry.npmjs.org/pg/-/pg-8.23.1.tgz",
+@@ -8494,6 +8830,16 @@
+         "node": ">=6"
+       }
+     },
++    "node_modules/punycode.js": {
++      "version": "2.3.1",
++      "resolved": "https://registry.npmjs.org/punycode.js/-/punycode.js-2.3.1.tgz",
++      "integrity": "sha512-uxFIHU0YlHYhDQtV4R9J6a52SLx28BCjT+4ieh7IGbgwVJWO+km431c4yRlREUAsAmt/uMjQUyQHNEPf0M39CA==",
++      "dev": true,
++      "license": "MIT",
++      "engines": {
++        "node": ">=6"
++      }
++    },
+     "node_modules/queue-microtask": {
+       "version": "1.2.3",
+       "resolved": "https://registry.npmjs.org/queue-microtask/-/queue-microtask-1.2.3.tgz",
+@@ -8900,12 +9246,32 @@
+         "url": "https://github.com/sponsors/ljharb"
+       }
+     },
++    "node_modules/safer-buffer": {
++      "version": "2.1.2",
++      "resolved": "https://registry.npmjs.org/safer-buffer/-/safer-buffer-2.1.2.tgz",
++      "integrity": "sha512-YZo3K82SD7Riyi0E1EQPojLz7kpepnSQI9IyPbHHg1XXXevb5dJI7tpyN2ADxGcQbHG7vcyRHk0cbwqcQriUtg==",
++      "dev": true,
++      "license": "MIT"
++    },
+     "node_modules/scheduler": {
+       "version": "0.28.0",
+       "resolved": "https://registry.npmjs.org/scheduler/-/scheduler-0.28.0.tgz",
+       "integrity": "sha512-juorfCmIkIw8tT+p5BXSm6PJjQF/ycEYmKyzURCIt/RaZIhL+PulbQ9Yu2z1HdOJDdqDTlxA1+xKBmHXJsczAw==",
+       "license": "MIT"
+     },
++    "node_modules/selderee": {
++      "version": "0.12.0",
++      "resolved": "https://registry.npmjs.org/selderee/-/selderee-0.12.0.tgz",
++      "integrity": "sha512-b1YMh3+DHZp59DLna3qVwQ5iOla/nrI6mLBNW02XxU77M3046Df6VLkoaJyFz20VsGIG5kkp+FK0kg4K4HnUFw==",
++      "dev": true,
++      "license": "MIT",
++      "dependencies": {
++        "parseley": "~0.13.1"
++      },
++      "funding": {
++        "url": "https://github.com/sponsors/KillyMXI"
++      }
++    },
+     "node_modules/semver": {
+       "version": "6.3.1",
+       "resolved": "https://registry.npmjs.org/semver/-/semver-6.3.1.tgz",
+@@ -9137,6 +9503,20 @@
+       "integrity": "sha512-wnD2ZE+l+SPC/uoS0vXeE9L1+0wuaMqKlfz9AMUo38JsyLSBWSFcHR1Rri62LZc12vLr1gb3jl7iwQhgwpAbGQ==",
+       "license": "ISC"
+     },
++    "node_modules/smtp-server": {
++      "version": "3.21.7",
++      "resolved": "https://registry.npmjs.org/smtp-server/-/smtp-server-3.21.7.tgz",
++      "integrity": "sha512-HZtF8LivEuPtcVuoCYHa60GTHohwPpwz90GHUwm88Xg2tI4ZJCHWTzuS08uufMkme4qvReqD7vEQSdyRGbRQ2Q==",
++      "dev": true,
++      "license": "MIT-0",
++      "dependencies": {
++        "nodemailer": "10.6.1",
++        "punycode.js": "2.3.1"
++      },
++      "engines": {
++        "node": ">=20.0.0"
++      }
++    },
+     "node_modules/source-map-js": {
+       "version": "1.2.2",
+       "resolved": "https://registry.npmjs.org/source-map-js/-/source-map-js-1.2.2.tgz",
+@@ -9471,6 +9851,16 @@
+         "url": "https://github.com/sponsors/jonschlinkert"
+       }
+     },
++    "node_modules/tlds": {
++      "version": "1.261.0",
++      "resolved": "https://registry.npmjs.org/tlds/-/tlds-1.261.0.tgz",
++      "integrity": "sha512-QXqwfEl9ddlGBaRFXIvNKK6OhipSiLXuRuLJX5DErz0o0Q0rYxulWLdFryTkV5PkdZct5iMInwYEGe/eR++1AA==",
++      "dev": true,
++      "license": "MIT",
++      "bin": {
++        "tlds": "bin.js"
++      }
++    },
+     "node_modules/to-regex-range": {
+       "version": "5.0.1",
+       "resolved": "https://registry.npmjs.org/to-regex-range/-/to-regex-range-5.0.1.tgz",
+@@ -9667,6 +10057,13 @@
+         "typescript": ">=4.8.4 <6.1.0"
+       }
+     },
++    "node_modules/uc.micro": {
++      "version": "3.0.0",
++      "resolved": "https://registry.npmjs.org/uc.micro/-/uc.micro-3.0.0.tgz",
++      "integrity": "sha512-U3PppEkleoTnIfi8BozMx3yju3qc/L6SwqWo2Sw+54PX+PX0q9I+r1Um5HCmqD7n9VDX5/v3vQH/AjA6deDdtw==",
++      "dev": true,
++      "license": "MIT"
++    },
+     "node_modules/unbox-primitive": {
+       "version": "1.1.0",
+       "resolved": "https://registry.npmjs.org/unbox-primitive/-/unbox-primitive-1.1.0.tgz",
+diff --git a/package.json b/package.json
+index b25f263..9c49882 100644
+--- a/package.json
++++ b/package.json
+@@ -41,6 +41,7 @@
+     "lucide-react": "^0.577.0",
+     "next": "16.4.6",
+     "node-forge": "1.4.3",
++    "nodemailer": "^10.6.1",
+     "pdf-lib": "^1.17.1",
+     "pdfjs-dist": "5.5.207",
+     "pg": "^8.23.1",
+@@ -63,7 +64,9 @@
+     "@types/react-dom": "^19.3.0",
+     "eslint": "^9",
+     "eslint-config-next": "16.4.6",
++    "mailparser": "^3.15.0",
+     "prettier": "^3.10.0",
++    "smtp-server": "^3.21.7",
+     "tailwindcss": "^4.3.5",
+     "typescript": "^5"
+   },
+diff --git a/src/lib/email/accounts.ts b/src/lib/email/accounts.ts
+new file mode 100644
+index 0000000..6d9affa
+--- /dev/null
++++ b/src/lib/email/accounts.ts
+@@ -0,0 +1,1002 @@
++import { randomUUID } from "node:crypto";
++
++import { z } from "zod";
++
++import {
++  getDb,
++  queryMany,
++  queryOne,
++  withTransaction,
++  type DbExecutor,
++  type DbPool,
++} from "../db/connection.ts";
++import { emailSchema } from "../schemas/common.ts";
++import { type EnvSource } from "../utils/env.ts";
++import { openJson, sealJson } from "./crypto.ts";
++import {
++  getPreset,
++  PROVIDER_PRESET_IDS,
++  type AccountProvider,
++  type ProviderPresetId,
++  type SmtpSecurity,
++} from "./presets.ts";
++import { verifyResendApiKey } from "./resend.ts";
++import {
++  checkSmtpEndpoint,
++  normalizeSmtpHost,
++  verifySmtpSettings,
++  type SmtpSettings,
++  type SmtpTransportOptions,
++} from "./smtp.ts";
++import { EmailTransportError } from "./types.ts";
++
++// Connected mailboxes and who may do what with them.
++//
++// - A personal account is seen, used, changed and removed by its owner
++//   only. Nobody else's resolution ever considers it, administrators
++//   included.
++// - An organisation account is created, changed and removed by
++//   administrators only. It is used by the people it is shared with:
++//   nobody (then it only carries platform mail, as the default), everyone,
++//   or chosen teams.
++// - A person may prefer only an account they own or one shared with them.
++// - No view ever carries a password, API key or token.
++
++export type AccountScope = "organization" | "personal";
++export type AccountStatus = "connected" | "needs_reconnect" | "error";
++export type SharedWith = "nobody" | "everyone" | "teams";
++
++export type EmailAccountRecord = {
++  createdAt: number;
++  dailyLimit: number | null;
++  displayName: string | null;
++  emailAddress: string;
++  encryptedCredentials: string;
++  id: string;
++  isDefault: boolean;
++  lastError: string | null;
++  lastErrorAt: number | null;
++  lastSuccessAt: number | null;
++  oauthScope: string | null;
++  ownerUserId: string | null;
++  presetId: ProviderPresetId;
++  provider: AccountProvider;
++  providerAccountId: string | null;
++  replyTo: string | null;
++  scope: AccountScope;
++  sharedWith: SharedWith;
++  smtpHost: string | null;
++  smtpPort: number | null;
++  smtpSecurity: SmtpSecurity | null;
++  smtpUsername: string | null;
++  status: AccountStatus;
++  updatedAt: number;
++};
++
++export type StoredCredentials =
++  | { password: string; type: "password" }
++  | { apiKey: string; type: "api_key" }
++  | {
++      accessToken: string;
++      /** Unix seconds. */
++      expiresAt: number;
++      refreshToken: string | null;
++      scope: string;
++      type: "oauth";
++    };
++
++export type EmailAccountView = {
++  createdAt: number;
++  displayName: string | null;
++  emailAddress: string;
++  id: string;
++  isDefault: boolean;
++  lastError: string | null;
++  lastErrorAt: number | null;
++  lastSuccessAt: number | null;
++  ownedByMe: boolean;
++  presetId: ProviderPresetId;
++  provider: AccountProvider;
++  replyTo: string | null;
++  scope: AccountScope;
++  sharedWith: SharedWith;
++  smtp: {
++    host: string;
++    port: number;
++    security: SmtpSecurity;
++    username: string;
++  } | null;
++  status: AccountStatus;
++  teamIds: string[];
++};
++
++export class EmailAccountError extends Error {
++  readonly code: string | null;
++  readonly fieldErrors: Record<string, string> | null;
++  readonly statusCode: number;
++
++  constructor(
++    message: string,
++    statusCode: number,
++    {
++      code = null,
++      fieldErrors = null,
++    }: { code?: string | null; fieldErrors?: Record<string, string> | null } = {},
++  ) {
++    super(message);
++    this.name = "EmailAccountError";
++    this.code = code;
++    this.fieldErrors = fieldErrors;
++    this.statusCode = statusCode;
++  }
++}
++
++export const ACCOUNT_COLUMNS = `
++  a.id,
++  a.scope,
++  a.owner_user_id AS "ownerUserId",
++  a.provider,
++  a.preset_id AS "presetId",
++  a.email_address AS "emailAddress",
++  a.display_name AS "displayName",
++  a.reply_to AS "replyTo",
++  a.status,
++  a.encrypted_credentials AS "encryptedCredentials",
++  a.smtp_host AS "smtpHost",
++  a.smtp_port AS "smtpPort",
++  a.smtp_security AS "smtpSecurity",
++  a.smtp_username AS "smtpUsername",
++  a.provider_account_id AS "providerAccountId",
++  a.oauth_scope AS "oauthScope",
++  a.daily_limit AS "dailyLimit",
++  a.is_default AS "isDefault",
++  a.shared_with AS "sharedWith",
++  a.last_success_at AS "lastSuccessAt",
++  a.last_error AS "lastError",
++  a.last_error_at AS "lastErrorAt",
++  a.created_at AS "createdAt",
++  a.updated_at AS "updatedAt"
++`;
++
++/**
++ * The accounts a person may send through: their own, and organisation
++ * accounts shared with everyone or with a team they are on. $1 is the
++ * person's id. Nothing else is ever a candidate.
++ */
++export const USABLE_BY_USER = `
++  (
++    (a.scope = 'personal' AND a.owner_user_id = $1)
++    OR (
++      a.scope = 'organization'
++      AND (
++        a.shared_with = 'everyone'
++        OR (
++          a.shared_with = 'teams'
++          AND EXISTS (
++            SELECT 1
++            FROM email_account_teams t
++            JOIN team_members m ON m.team_id = t.team_id
++            WHERE t.account_id = a.id AND m.user_id = $1
++          )
++        )
++      )
++    )
++  )
++`;
++
++function now(): number {
++  return Math.floor(Date.now() / 1000);
++}
++
++export function credentialsContext(accountId: string): string {
++  return `email-account:${accountId}`;
++}
++
++export function sealCredentials(
++  accountId: string,
++  credentials: StoredCredentials,
++  env: EnvSource = process.env,
++): string {
++  return sealJson(credentials, { context: credentialsContext(accountId), env });
++}
++
++export function openCredentials(
++  account: Pick<EmailAccountRecord, "encryptedCredentials" | "id">,
++  env: EnvSource = process.env,
++): StoredCredentials {
++  return openJson<StoredCredentials>(account.encryptedCredentials, {
++    context: credentialsContext(account.id),
++    env,
++  });
++}
++
++export async function isAdministrator(
++  userId: string,
++  database: DbExecutor = getDb(),
++): Promise<boolean> {
++  const row = await queryOne<{ role: string | null }>(
++    database,
++    `SELECT role FROM public."user" WHERE id = $1`,
++    [userId],
++  );
++
++  return row?.role === "admin";
++}
++
++export async function loadAccount(
++  accountId: string,
++  database: DbExecutor = getDb(),
++): Promise<EmailAccountRecord | null> {
++  return queryOne<EmailAccountRecord>(
++    database,
++    `SELECT ${ACCOUNT_COLUMNS} FROM email_accounts a WHERE a.id = $1`,
++    [accountId],
++  );
++}
++
++/** The account, when this person may send through it. */
++export async function loadUsableAccount(
++  userId: string,
++  accountId: string,
++  database: DbExecutor = getDb(),
++): Promise<EmailAccountRecord | null> {
++  return queryOne<EmailAccountRecord>(
++    database,
++    `SELECT ${ACCOUNT_COLUMNS} FROM email_accounts a WHERE a.id = $2 AND ${USABLE_BY_USER}`,
++    [userId, accountId],
++  );
++}
++
++export async function canUseAccount(
++  userId: string,
++  accountId: string,
++  database: DbExecutor = getDb(),
++): Promise<boolean> {
++  return (await loadUsableAccount(userId, accountId, database)) !== null;
++}
++
++/** Personal accounts: their owner. Organisation accounts: administrators. */
++export async function canManageAccount(
++  userId: string,
++  account: Pick<EmailAccountRecord, "ownerUserId" | "scope">,
++  database: DbExecutor = getDb(),
++): Promise<boolean> {
++  return account.scope === "personal"
++    ? account.ownerUserId === userId
++    : isAdministrator(userId, database);
++}
++
++/**
++ * The account for someone who wants to change it or look at it closely.
++ * One they may not see is reported as missing, not as forbidden, so its
++ * existence is not given away.
++ */
++async function loadManagedAccount(
++  userId: string,
++  accountId: string,
++  database: DbExecutor,
++): Promise<EmailAccountRecord> {
++  const account = await loadAccount(accountId, database);
++
++  if (!account || !(await canManageAccount(userId, account, database))) {
++    if (account?.scope === "organization") {
++      throw new EmailAccountError(
++        "Only an administrator can change organisation email accounts.",
++        403,
++      );
++    }
++
++    throw new EmailAccountError("That email account no longer exists.", 404);
++  }
++
++  return account;
++}
++
++async function listTeamIds(
++  accountIds: readonly string[],
++  database: DbExecutor,
++): Promise<Map<string, string[]>> {
++  const rows =
++    accountIds.length === 0
++      ? []
++      : await queryMany<{ accountId: string; teamId: string }>(
++          database,
++          `
++            SELECT account_id AS "accountId", team_id AS "teamId"
++            FROM email_account_teams
++            WHERE account_id = ANY($1::text[])
++            ORDER BY team_id
++          `,
++          [accountIds],
++        );
++  const byAccount = new Map<string, string[]>();
++
++  for (const row of rows) {
++    byAccount.set(row.accountId, [
++      ...(byAccount.get(row.accountId) ?? []),
++      row.teamId,
++    ]);
++  }
++
++  return byAccount;
++}
++
++export function toAccountView(
++  account: EmailAccountRecord,
++  userId: string,
++  teamIds: string[] = [],
++): EmailAccountView {
++  return {
++    createdAt: account.createdAt,
++    displayName: account.displayName,
++    emailAddress: account.emailAddress,
++    id: account.id,
++    isDefault: account.isDefault,
++    lastError: account.lastError,
++    lastErrorAt: account.lastErrorAt,
++    lastSuccessAt: account.lastSuccessAt,
++    ownedByMe: account.scope === "personal" && account.ownerUserId === userId,
++    presetId: account.presetId,
++    provider: account.provider,
++    replyTo: account.replyTo,
++    scope: account.scope,
++    sharedWith: account.sharedWith,
++    smtp:
++      account.provider === "smtp" &&
++      account.smtpHost &&
++      account.smtpPort &&
++      account.smtpSecurity
++        ? {
++            host: account.smtpHost,
++            port: account.smtpPort,
++            security: account.smtpSecurity,
++            username: account.smtpUsername ?? "",
++          }
++        : null,
++    status: account.status,
++    teamIds,
++  };
++}
++
++/**
++ * What a person sees in Settings > Email & Integrations: their own
++ * accounts, and the organisation's (all of them for an administrator, the
++ * ones shared with them otherwise).
++ */
++export async function listVisibleAccounts(
++  userId: string,
++  database: DbExecutor = getDb(),
++): Promise<{
++  accounts: EmailAccountView[];
++  canManageOrganization: boolean;
++  preferredAccountId: string | null;
++}> {
++  const admin = await isAdministrator(userId, database);
++  const rows = await queryMany<EmailAccountRecord>(
++    database,
++    `
++      SELECT ${ACCOUNT_COLUMNS}
++      FROM email_accounts a
++      WHERE ${admin ? `(a.scope = 'organization' OR (a.scope = 'personal' AND a.owner_user_id = $1))` : USABLE_BY_USER}
++      ORDER BY a.scope, a.is_default DESC, lower(a.email_address), a.id
++    `,
++    [userId],
++  );
++  const teamIds = await listTeamIds(
++    rows.map((row) => row.id),
++    database,
++  );
++
++  return {
++    accounts: rows.map((row) =>
++      toAccountView(row, userId, teamIds.get(row.id) ?? []),
++    ),
++    canManageOrganization: admin,
++    preferredAccountId: await getPreferredAccountId(userId, database),
++  };
++}
++
++/** The account a person prefers, while they may still use it. */
++export async function getPreferredAccountId(
++  userId: string,
++  database: DbExecutor = getDb(),
++): Promise<string | null> {
++  const row = await queryOne<{ accountId: string }>(
++    database,
++    `
++      SELECT p.account_id AS "accountId"
++      FROM email_account_preferences p
++      JOIN email_accounts a ON a.id = p.account_id
++      WHERE p.user_id = $1 AND ${USABLE_BY_USER}
++    `,
++    [userId],
++  );
++
++  return row?.accountId ?? null;
++}
++
++export async function setPreferredAccount(
++  userId: string,
++  accountId: string | null,
++  database: DbExecutor = getDb(),
++): Promise<void> {
++  if (accountId === null) {
++    await database.query(
++      `DELETE FROM email_account_preferences WHERE user_id = $1`,
++      [userId],
++    );
++    return;
++  }
++
++  if (!(await canUseAccount(userId, accountId, database))) {
++    throw new EmailAccountError(
++      "You can only choose an account you connected or one shared with you.",
++      404,
++    );
++  }
++
++  await database.query(
++    `
++      INSERT INTO email_account_preferences (user_id, account_id, updated_at)
++      VALUES ($1, $2, $3)
++      ON CONFLICT (user_id) DO UPDATE
++      SET account_id = EXCLUDED.account_id, updated_at = EXCLUDED.updated_at
++    `,
++    [userId, accountId, now()],
++  );
++}
++
++// --- Creating and changing accounts ---------------------------------------
++
++const optionalText = (max: number) =>
++  z
++    .string()
++    .trim()
++    .max(max)
++    .nullish()
++    .transform((value) => (value ? value : null));
++
++const optionalEmail = z
++  .union([emailSchema, z.literal("")])
++  .nullish()
++  .transform((value) => (value ? value.toLowerCase() : null));
++
++export const createAccountSchema = z.object({
++  apiKey: z.string().trim().min(1).max(512).optional(),
++  dailyLimit: z.number().int().positive().max(1_000_000).nullish(),
++  displayName: optionalText(120),
++  emailAddress: emailSchema.transform((value) => value.toLowerCase()),
++  host: z.string().trim().max(253).optional(),
++  isDefault: z.boolean().optional(),
++  password: z.string().min(1).max(1024).optional(),
++  port: z.number().int().optional(),
++  presetId: z.enum(PROVIDER_PRESET_IDS),
++  replyTo: optionalEmail,
++  scope: z.enum(["organization", "personal"]),
++  security: z.enum(["tls", "starttls"]).optional(),
++  sharedWith: z.enum(["nobody", "everyone", "teams"]).optional(),
++  teamIds: z.array(z.string().min(1).max(100)).max(200).optional(),
++  username: z.string().trim().max(320).optional(),
++});
++
++export type CreateAccountInput = z.input<typeof createAccountSchema>;
++
++export const updateAccountSchema = z.object({
++  dailyLimit: z.number().int().positive().max(1_000_000).nullish(),
++  displayName: optionalText(120).optional(),
++  isDefault: z.boolean().optional(),
++  password: z.string().min(1).max(1024).optional(),
++  replyTo: optionalEmail.optional(),
++  sharedWith: z.enum(["nobody", "everyone", "teams"]).optional(),
++  teamIds: z.array(z.string().min(1).max(100)).max(200).optional(),
++});
++
++export type UpdateAccountInput = z.input<typeof updateAccountSchema>;
++
++export function fieldErrorsOf(error: z.ZodError): Record<string, string> {
++  const fieldErrors: Record<string, string> = {};
++
++  for (const issue of error.issues) {
++    const field = issue.path.join(".") || "body";
++
++    fieldErrors[field] ??= issue.message;
++  }
++
++  return fieldErrors;
++}
++
++function parse<T extends z.ZodType>(schema: T, input: unknown): z.output<T> {
++  const parsed = schema.safeParse(input);
++
++  if (!parsed.success) {
++    const fieldErrors = fieldErrorsOf(parsed.error);
++
++    throw new EmailAccountError("Check the highlighted fields.", 400, {
++      fieldErrors,
++    });
++  }
++
++  return parsed.data;
++}
++
++export type AccountOptions = {
++  database?: DbPool;
++  env?: EnvSource;
++  /** Passed to the SMTP check, so a test can trust its own server. */
++  smtp?: SmtpTransportOptions;
++  /** Replaced in tests that must not reach Resend. */
++  verifyResendKey?: (apiKey: string) => Promise<void>;
++};
++
++function verificationFailed(error: unknown, field: string): EmailAccountError {
++  const message =
++    error instanceof Error && error.message
++      ? error.message
++      : "The account could not be verified.";
++
++  return new EmailAccountError(message, 422, {
++    code:
++      error instanceof EmailTransportError && error.kind === "auth"
++        ? "authentication_failed"
++        : "verification_failed",
++    fieldErrors: { [field]: message },
++  });
++}
++
++async function assertTeamsExist(
++  teamIds: readonly string[],
++  database: DbExecutor,
++): Promise<void> {
++  if (teamIds.length === 0) {
++    throw new EmailAccountError("Choose at least one team.", 400, {
++      fieldErrors: { teamIds: "Choose at least one team." },
++    });
++  }
++
++  const found = await queryMany<{ id: string }>(
++    database,
++    `SELECT id FROM teams WHERE id = ANY($1::text[])`,
++    [teamIds],
++  );
++
++  if (found.length !== new Set(teamIds).size) {
++    throw new EmailAccountError("One of those teams no longer exists.", 400, {
++      fieldErrors: { teamIds: "One of those teams no longer exists." },
++    });
++  }
++}
++
++async function replaceTeams(
++  accountId: string,
++  teamIds: readonly string[],
++  database: DbExecutor,
++): Promise<void> {
++  await database.query(`DELETE FROM email_account_teams WHERE account_id = $1`, [
++    accountId,
++  ]);
++
++  for (const teamId of new Set(teamIds)) {
++    await database.query(
++      `INSERT INTO email_account_teams (account_id, team_id) VALUES ($1, $2)`,
++      [accountId, teamId],
++    );
++  }
++}
++
++/** The SMTP settings to use for a preset, from what was entered. */
++export function resolveSmtpInput(
++  presetId: ProviderPresetId,
++  input: {
++    emailAddress: string;
++    host?: string;
++    password?: string;
++    port?: number;
++    security?: SmtpSecurity;
++    username?: string;
++  },
++): SmtpSettings {
++  const preset = getPreset(presetId);
++  const fieldErrors: Record<string, string> = {};
++  let host: string;
++  let port: number;
++  let security: SmtpSecurity;
++
++  if (preset.smtpDefaults) {
++    const chosenHost = input.host ? normalizeSmtpHost(input.host) : null;
++
++    if (chosenHost && !preset.smtpHosts.includes(chosenHost)) {
++      fieldErrors.host = `${preset.name} uses ${preset.smtpHosts.join(" or ")}.`;
++    }
++
++    host = chosenHost ?? preset.smtpDefaults.host;
++    port = preset.smtpDefaults.port;
++    security = preset.smtpDefaults.security;
++  } else {
++    host = normalizeSmtpHost(input.host ?? "");
++    port = input.port ?? 587;
++    security = input.security ?? (port === 465 ? "tls" : "starttls");
++    Object.assign(fieldErrors, checkSmtpEndpoint({ host, port, security }));
++  }
++
++  const username = preset.usernameIsAddress
++    ? input.emailAddress
++    : (input.username?.trim() || input.emailAddress);
++
++  if (!input.password) {
++    fieldErrors.password = preset.appPasswordRequired
++      ? `Enter an app password for ${preset.name}. Your normal password does not work here.`
++      : "Enter the password.";
++  }
++
++  if (Object.keys(fieldErrors).length > 0) {
++    throw new EmailAccountError("Check the highlighted fields.", 400, {
++      fieldErrors,
++    });
++  }
++
++  return { host, password: input.password!, port, security, username };
++}
++
++function isUniqueViolation(error: unknown): boolean {
++  return (error as { code?: unknown } | null)?.code === "23505";
++}
++
++export type AccountActor = { email: string; name: string; userId: string };
++
++/**
++ * Connects an SMTP or Resend account. The credentials are tried first, for
++ * real: nothing is saved that does not sign in.
++ */
++export async function createAccount(
++  actor: AccountActor,
++  rawInput: unknown,
++  {
++    database = getDb(),
++    env = process.env,
++    smtp,
++    verifyResendKey = (apiKey) => verifyResendApiKey(apiKey),
++  }: AccountOptions = {},
++): Promise<EmailAccountView> {
++  const input = parse(createAccountSchema, rawInput);
++  const preset = getPreset(input.presetId);
++
++  if (preset.method === "oauth") {
++    throw new EmailAccountError(
++      `Connect ${preset.name} with the "Connect with ${preset.oauth === "google" ? "Google" : "Microsoft"}" button. PACTORA never asks for a ${preset.oauth === "google" ? "Google" : "Microsoft"} password.`,
++      400,
++      { code: "oauth_required", fieldErrors: { presetId: "Use the sign-in button for this provider." } },
++    );
++  }
++
++  const admin = await isAdministrator(actor.userId, database);
++
++  if (input.scope === "organization" && !admin) {
++    throw new EmailAccountError(
++      "Only an administrator can connect an organisation email account.",
++      403,
++    );
++  }
++
++  if (input.scope === "personal" && (input.isDefault || (input.sharedWith && input.sharedWith !== "nobody"))) {
++    throw new EmailAccountError(
++      "A personal account is only ever yours: it cannot be shared or be the organisation's default.",
++      400,
++      { fieldErrors: { sharedWith: "Personal accounts are not shared." } },
++    );
++  }
++
++  const sharedWith = input.scope === "organization" ? (input.sharedWith ?? "nobody") : "nobody";
++
++  if (sharedWith === "teams") {
++    await assertTeamsExist(input.teamIds ?? [], database);
++  }
++
++  const id = randomUUID();
++  let credentials: StoredCredentials;
++  let smtpSettings: SmtpSettings | null = null;
++
++  if (preset.provider === "resend") {
++    if (!input.apiKey) {
++      throw new EmailAccountError("Enter the Resend API key.", 400, {
++        fieldErrors: { apiKey: "Enter the Resend API key." },
++      });
++    }
++
++    try {
++      await verifyResendKey(input.apiKey);
++    } catch (error) {
++      throw verificationFailed(error, "apiKey");
++    }
++
++    credentials = { apiKey: input.apiKey, type: "api_key" };
++  } else {
++    smtpSettings = resolveSmtpInput(input.presetId, {
++      emailAddress: input.emailAddress,
++      host: input.host,
++      password: input.password,
++      port: input.port,
++      security: input.security,
++      username: input.username,
++    });
++
++    try {
++      await verifySmtpSettings(smtpSettings, { env, ...smtp });
++    } catch (error) {
++      throw verificationFailed(error, "password");
++    }
++
++    credentials = { password: smtpSettings.password, type: "password" };
++  }
++
++  const timestamp = now();
++
++  try {
++    await withTransaction(async (tx) => {
++      if (input.isDefault) {
++        await tx.query(
++          `UPDATE email_accounts SET is_default = false, updated_at = $1 WHERE is_default`,
++          [timestamp],
++        );
++      }
++
++      await tx.query(
++        `
++          INSERT INTO email_accounts (
++            id, scope, owner_user_id, created_by_user_id, provider, preset_id,
++            email_address, display_name, reply_to, status,
++            encrypted_credentials, smtp_host, smtp_port, smtp_security,
++            smtp_username, daily_limit, is_default, shared_with,
++            last_success_at, created_at, updated_at
++          )
++          VALUES (
++            $1, $2, $3, $4, $5, $6, $7, $8, $9, 'connected', $10, $11, $12,
++            $13, $14, $15, $16, $17, $18, $18, $18
++          )
++        `,
++        [
++          id,
++          input.scope,
++          input.scope === "personal" ? actor.userId : null,
++          actor.userId,
++          preset.provider,
++          preset.id,
++          input.emailAddress,
++          input.displayName,
++          input.replyTo,
++          sealCredentials(id, credentials, env),
++          smtpSettings?.host ?? null,
++          smtpSettings?.port ?? null,
++          smtpSettings?.security ?? null,
++          smtpSettings?.username ?? null,
++          input.dailyLimit ?? null,
++          input.scope === "organization" && Boolean(input.isDefault),
++          sharedWith,
++          timestamp,
++        ],
++      );
++
++      if (sharedWith === "teams") {
++        await replaceTeams(id, input.teamIds ?? [], tx);
++      }
++    }, database);
++  } catch (error) {
++    if (isUniqueViolation(error)) {
++      throw new EmailAccountError(
++        `${input.emailAddress} is already connected.`,
++        409,
++        { code: "already_connected", fieldErrors: { emailAddress: "Already connected." } },
++      );
++    }
++
++    throw error;
++  }
++
++  const created = (await loadAccount(id, database))!;
++
++  return toAccountView(created, actor.userId, sharedWith === "teams" ? [...new Set(input.teamIds)].sort() : []);
++}
++
++export async function updateAccount(
++  actor: AccountActor,
++  accountId: string,
++  rawInput: unknown,
++  { database = getDb(), env = process.env, smtp }: AccountOptions = {},
++): Promise<EmailAccountView> {
++  const input = parse(updateAccountSchema, rawInput);
++  const account = await loadManagedAccount(actor.userId, accountId, database);
++  const timestamp = now();
++
++  if (
++    account.scope === "personal" &&
++    (input.isDefault || (input.sharedWith && input.sharedWith !== "nobody") || input.teamIds)
++  ) {
++    throw new EmailAccountError(
++      "A personal account is only ever yours: it cannot be shared or be the organisation's default.",
++      400,
++      { fieldErrors: { sharedWith: "Personal accounts are not shared." } },
++    );
++  }
++
++  const sharedWith = input.sharedWith ?? account.sharedWith;
++
++  if (sharedWith === "teams" && (input.sharedWith === "teams" || input.teamIds)) {
++    await assertTeamsExist(input.teamIds ?? (await listTeamIds([account.id], database)).get(account.id) ?? [], database);
++  }
++
++  let encryptedCredentials = account.encryptedCredentials;
++  let status = account.status;
++
++  if (input.password !== undefined) {
++    if (account.provider !== "smtp") {
++      throw new EmailAccountError(
++        "Only an SMTP account has a password. Reconnect this account instead.",
++        400,
++        { fieldErrors: { password: "This account does not use a password." } },
++      );
++    }
++
++    const settings: SmtpSettings = {
++      host: account.smtpHost ?? "",
++      password: input.password,
++      port: account.smtpPort ?? 0,
++      security: account.smtpSecurity ?? "starttls",
++      username: account.smtpUsername ?? account.emailAddress,
++    };
++
++    try {
++      await verifySmtpSettings(settings, { env, ...smtp });
++    } catch (error) {
++      throw verificationFailed(error, "password");
++    }
++
++    encryptedCredentials = sealCredentials(
++      account.id,
++      { password: input.password, type: "password" },
++      env,
++    );
++    status = "connected";
++  }
++
++  await withTransaction(async (tx) => {
++    if (input.isDefault === true) {
++      await tx.query(
++        `UPDATE email_accounts SET is_default = false, updated_at = $1 WHERE is_default AND id <> $2`,
++        [timestamp, account.id],
++      );
++    }
++
++    await tx.query(
++      `
++        UPDATE email_accounts
++        SET display_name = $2,
++            reply_to = $3,
++            is_default = $4,
++            shared_with = $5,
++            encrypted_credentials = $6,
++            status = $7,
++            daily_limit = $8,
++            last_error = CASE WHEN $7 = 'connected' AND status <> 'connected' THEN NULL ELSE last_error END,
++            updated_at = $9
++        WHERE id = $1
++      `,
++      [
++        account.id,
++        input.displayName === undefined ? account.displayName : input.displayName,
++        input.replyTo === undefined ? account.replyTo : input.replyTo,
++        input.isDefault ?? account.isDefault,
++        sharedWith,
++        encryptedCredentials,
++        status,
++        input.dailyLimit === undefined ? account.dailyLimit : input.dailyLimit,
++        timestamp,
++      ],
++    );
++
++    if (sharedWith !== "teams") {
++      await tx.query(`DELETE FROM email_account_teams WHERE account_id = $1`, [
++        account.id,
++      ]);
++    } else if (input.teamIds) {
++      await replaceTeams(account.id, input.teamIds, tx);
++    }
++
++    // Shared more narrowly: whoever can no longer use it stops preferring it.
++    await tx.query(
++      `
++        DELETE FROM email_account_preferences p
++        USING email_accounts a
++        WHERE p.account_id = $1 AND a.id = p.account_id
++          AND NOT ${USABLE_BY_USER.replaceAll("$1", "p.user_id")}
++      `,
++      [account.id],
++    );
++  }, database);
++
++  const updated = (await loadAccount(account.id, database))!;
++  const teamIds = await listTeamIds([account.id], database);
++
++  return toAccountView(updated, actor.userId, teamIds.get(account.id) ?? []);
++}
++
++/** Removes the account. Revoking an OAuth grant is the caller's (oauth.ts). */
++export async function deleteAccountRow(
++  actor: AccountActor,
++  accountId: string,
++  database: DbPool = getDb(),
++): Promise<EmailAccountRecord> {
++  const account = await loadManagedAccount(actor.userId, accountId, database);
++
++  await database.query(`DELETE FROM email_accounts WHERE id = $1`, [account.id]);
++
++  return account;
++}
++
++/** The account for someone who may manage it, or an EmailAccountError. */
++export async function requireManagedAccount(
++  userId: string,
++  accountId: string,
++  database: DbExecutor = getDb(),
++): Promise<EmailAccountRecord> {
++  return loadManagedAccount(userId, accountId, database);
++}
++
++/** Notes how the account's last send went, for Settings. */
++export async function recordAccountOutcome(
++  accountId: string,
++  outcome:
++    | { ok: true }
++    | { error: string; needsReconnect?: boolean; ok: false },
++  database: DbExecutor = getDb(),
++): Promise<void> {
++  const timestamp = now();
++
++  if (outcome.ok) {
++    await database.query(
++      `
++        UPDATE email_accounts
++        SET last_success_at = $2,
++            status = CASE WHEN status = 'error' THEN 'connected' ELSE status END,
++            updated_at = $2
++        WHERE id = $1
++      `,
++      [accountId, timestamp],
++    );
++    return;
++  }
++
++  await database.query(
++    `
++      UPDATE email_accounts
++      SET last_error = $2,
++          last_error_at = $3,
++          status = CASE WHEN $4 THEN 'needs_reconnect' ELSE status END,
++          updated_at = $3
++      WHERE id = $1
++    `,
++    [accountId, outcome.error.slice(0, 1000), timestamp, Boolean(outcome.needsReconnect)],
++  );
++}
++
++export async function saveAccountCredentials(
++  accountId: string,
++  credentials: StoredCredentials,
++  {
++    database = getDb(),
++    env = process.env,
++  }: { database?: DbExecutor; env?: EnvSource } = {},
++): Promise<void> {
++  await database.query(
++    `UPDATE email_accounts SET encrypted_credentials = $2, updated_at = $3 WHERE id = $1`,
++    [accountId, sealCredentials(accountId, credentials, env), now()],
++  );
++}
++
++/** The workspace's default organisation account, if there is one. */
++export async function loadDefaultAccount(
++  database: DbExecutor = getDb(),
++): Promise<EmailAccountRecord | null> {
++  return queryOne<EmailAccountRecord>(
++    database,
++    `SELECT ${ACCOUNT_COLUMNS} FROM email_accounts a WHERE a.is_default AND a.scope = 'organization'`,
++  );
++}
+diff --git a/src/lib/email/capture.ts b/src/lib/email/capture.ts
+new file mode 100644
+index 0000000..4813594
+--- /dev/null
++++ b/src/lib/email/capture.ts
+@@ -0,0 +1,110 @@
++import { createHash, randomUUID } from "node:crypto";
++import { mkdir, rename, writeFile } from "node:fs/promises";
++import path from "node:path";
++
++import { CAPTURED_MESSAGE_ID_PREFIX } from "../services/captured-email.ts";
++import {
++  isLocalDeployment,
++  readEnv,
++  type EnvSource,
++} from "../utils/env.ts";
++import { buildResendPayload } from "./resend.ts";
++import { type EmailTransport, type OutgoingMessage } from "./types.ts";
++
++// Development and test driver (EMAIL_DRIVER=capture): nothing is sent.
++// Each message is written as a JSON file so a person, or the end-to-end
++// test, can read the links in it. Never allowed on Vercel or on a deployed
++// production site, because it drops every email.
++
++const DEFAULT_CAPTURE_DIR = ".data/outbox";
++
++export const CAPTURE_IN_PRODUCTION_ERROR_MESSAGE =
++  "EMAIL_DRIVER=capture drops every email and cannot be used in production.";
++
++/**
++ * Whether EMAIL_DRIVER=capture may be used in this deployment.
++ * Allowed in development, and for a production build that is being run on
++ * localhost (which is what the end-to-end test does). Never on Vercel or on
++ * a deployed production site.
++ */
++export function isCaptureEmailDriverAllowed(
++  env: EnvSource = process.env,
++): boolean {
++  if (readEnv(env, "VERCEL") === "1") {
++    return false;
++  }
++
++  if (env.NODE_ENV !== "production") {
++    return true;
++  }
++
++  try {
++    return isLocalDeployment(env);
++  } catch {
++    return false;
++  }
++}
++
++export function createCaptureTransport(
++  env: EnvSource = process.env,
++): EmailTransport {
++  if (!isCaptureEmailDriverAllowed(env)) {
++    throw new Error(CAPTURE_IN_PRODUCTION_ERROR_MESSAGE);
++  }
++
++  // The comment stops Turbopack from tracing the whole project into the
++  // server bundle because of a path it cannot analyse.
++  const captureDir = path.resolve(
++    /*turbopackIgnore: true*/ env.EMAIL_CAPTURE_DIR?.trim() ||
++      DEFAULT_CAPTURE_DIR,
++  );
++
++  return {
++    // Nothing leaves the machine, so anything fits.
++    maxAttachmentBytes: Number.MAX_SAFE_INTEGER,
++    provider: "capture",
++    async send(message: OutgoingMessage) {
++      const messageId = `${CAPTURED_MESSAGE_ID_PREFIX}${randomUUID()}`;
++      const filePath = path.join(
++        /*turbopackIgnore: true*/ captureDir,
++        `${String(Date.now())}-${messageId}.json`,
++      );
++      const temporaryPath = `${filePath}.tmp`;
++
++      // Written under a temporary name and renamed, so anything watching
++      // the outbox never reads a half-written file.
++      await mkdir(captureDir, { recursive: true });
++      await writeFile(
++        temporaryPath,
++        JSON.stringify(
++          {
++            ...buildResendPayload({ ...message, attachments: [] }),
++            // The files themselves are not written out; their names, sizes
++            // and fingerprints are enough to check what would have been sent.
++            attachments: message.attachments.length
++              ? message.attachments.map((attachment) => ({
++                  bytes: attachment.content.byteLength,
++                  contentType: attachment.contentType,
++                  filename: attachment.filename,
++                  sha256: createHash("sha256")
++                    .update(attachment.content)
++                    .digest("hex"),
++                }))
++              : undefined,
++            capturedAt: new Date().toISOString(),
++            messageId,
++            template: message.template,
++          },
++          null,
++          2,
++        ),
++      );
++      await rename(temporaryPath, filePath);
++      console.info(
++        `[email:capture] ${message.template} to ${message.to} -> ${filePath}`,
++      );
++
++      return { providerMessageId: messageId };
++    },
++  };
++}
+diff --git a/src/lib/email/classify.ts b/src/lib/email/classify.ts
+new file mode 100644
+index 0000000..f52c655
+--- /dev/null
++++ b/src/lib/email/classify.ts
+@@ -0,0 +1,118 @@
++import { EmailTransportError, type DeliveryFailureKind } from "./types.ts";
++
++// Whether a failed send is worth trying again. Everything a transport
++// throws passes through here, so the rest of the engine only sees
++// EmailTransportError with a kind.
++
++const NETWORK_CODES = new Set([
++  "ECONNECTION",
++  "ECONNREFUSED",
++  "ECONNRESET",
++  "EDNS",
++  "EAI_AGAIN",
++  "ENETUNREACH",
++  "EHOSTUNREACH",
++  "EPIPE",
++  "ESOCKET",
++  "ETIMEDOUT",
++  "UND_ERR_CONNECT_TIMEOUT",
++  "UND_ERR_SOCKET",
++]);
++
++/** For an HTTP API: 429 and 5xx pass, 401/403 are the credentials. */
++export function kindForHttpStatus(status: number): DeliveryFailureKind {
++  if (status === 429 || status >= 500 || status === 408) {
++    return "transient";
++  }
++
++  return status === 401 || status === 403 ? "auth" : "permanent";
++}
++
++function readProperty(error: unknown, name: string): unknown {
++  return typeof error === "object" && error !== null && name in error
++    ? (error as Record<string, unknown>)[name]
++    : undefined;
++}
++
++/** The kind of a failure nodemailer reported for an SMTP conversation. */
++export function kindForSmtpError(error: unknown): DeliveryFailureKind {
++  const code = readProperty(error, "code");
++  const responseCode = readProperty(error, "responseCode");
++
++  if (code === "EAUTH" || responseCode === 535 || responseCode === 534) {
++    return "auth";
++  }
++
++  if (typeof responseCode === "number") {
++    if (responseCode >= 400 && responseCode < 500) {
++      return "transient";
++    }
++
++    if (responseCode >= 500) {
++      return "permanent";
++    }
++  }
++
++  if (typeof code === "string" && NETWORK_CODES.has(code)) {
++    return "transient";
++  }
++
++  const causeCode = readProperty(readProperty(error, "cause"), "code");
++
++  if (typeof causeCode === "string" && NETWORK_CODES.has(causeCode)) {
++    return "transient";
++  }
++
++  // A certificate that does not verify, a server without TLS, a message
++  // the server cannot take: none of these fix themselves.
++  return "permanent";
++}
++
++/** Any thrown value as an EmailTransportError. */
++export function toTransportError(error: unknown): EmailTransportError {
++  if (error instanceof EmailTransportError) {
++    return error;
++  }
++
++  const code = readProperty(error, "code");
++  const kind =
++    typeof code === "string" && NETWORK_CODES.has(code)
++      ? "transient"
++      : error instanceof TypeError && /fetch failed/i.test(error.message)
++        ? "transient"
++        : "permanent";
++
++  return new EmailTransportError(
++    error instanceof Error && error.message
++      ? error.message
++      : "Email delivery failed.",
++    { code: typeof code === "string" ? code : null, kind },
++  );
++}
++
++/**
++ * A fetch that threw never got an answer (no connection, a timeout), so
++ * nothing was sent and it is worth trying again.
++ */
++export function fetchFailure(
++  error: unknown,
++  service: string,
++): EmailTransportError {
++  const timedOut =
++    error instanceof Error &&
++    (error.name === "TimeoutError" || error.name === "AbortError");
++
++  return new EmailTransportError(
++    timedOut
++      ? `${service} did not answer in time.`
++      : `${service} could not be reached.`,
++    { code: timedOut ? "ETIMEDOUT" : "ECONNECTION", kind: "transient" },
++  );
++}
++
++/** Retry-After in milliseconds, when the header is a number of seconds. */
++export function retryAfterMs(header: string | null | undefined): number | null {
++  const seconds = Number(header);
++
++  return Number.isFinite(seconds) && seconds > 0 ? seconds * 1000 : null;
++}
+diff --git a/src/lib/email/crypto.ts b/src/lib/email/crypto.ts
+new file mode 100644
+index 0000000..b1637fb
+--- /dev/null
++++ b/src/lib/email/crypto.ts
+@@ -0,0 +1,170 @@
++import {
++  createCipheriv,
++  createDecipheriv,
++  createHash,
++  hkdfSync,
++  randomBytes,
++} from "node:crypto";
++
++import {
++  isProduction,
++  readEnv,
++  resolveAuthSecret,
++  type EnvSource,
++} from "../utils/env.ts";
++
++// Mailbox credentials (passwords, API keys, OAuth tokens) and pending
++// message payloads are kept in the database encrypted with AES-256-GCM.
++//
++// The key is EMAIL_CREDENTIALS_KEY when set (32 bytes, hex or base64), so
++// it can be rotated apart from the auth secret. Otherwise it is derived
++// from the auth secret with HKDF-SHA256 for this purpose only.
++//
++// A sealed value reads "ec1.<key id>.<iv>.<tag>.<ciphertext>", base64url.
++// The key id is a short fingerprint of the key, so a value sealed under a
++// key that has since changed is told apart from one that was tampered with.
++// Each value is bound to what it belongs to (additional authenticated
++// data), so a ciphertext copied onto another row does not open there.
++
++const KEY_CONTEXT = "pactora/email-credentials/v1";
++const FORMAT_VERSION = "ec1";
++
++export class EmailCredentialsError extends Error {
++  readonly reason: "malformed" | "other_key" | "tampered";
++
++  constructor(reason: "malformed" | "other_key" | "tampered") {
++    super(
++      reason === "other_key"
++        ? "These credentials were saved under a different encryption key. Reconnect the account."
++        : "These credentials could not be read. Reconnect the account.",
++    );
++    this.name = "EmailCredentialsError";
++    this.reason = reason;
++  }
++}
++
++function parseConfiguredKey(value: string): Buffer {
++  if (/^[0-9a-f]{64}$/i.test(value)) {
++    return Buffer.from(value, "hex");
++  }
++
++  const decoded = Buffer.from(value, "base64");
++
++  if (decoded.byteLength === 32) {
++    return decoded;
++  }
++
++  throw new Error(
++    "EMAIL_CREDENTIALS_KEY must be 32 bytes, written as 64 hex characters or in base64.",
++  );
++}
++
++/** The key mailbox credentials are sealed with. */
++export function resolveCredentialsKey(env: EnvSource = process.env): Buffer {
++  const configured = readEnv(env, "EMAIL_CREDENTIALS_KEY");
++
++  if (configured) {
++    return parseConfiguredKey(configured);
++  }
++
++  const secret = resolveAuthSecret(env);
++
++  if (!secret) {
++    if (isProduction(env)) {
++      throw new Error(
++        "Saving email credentials needs EMAIL_CREDENTIALS_KEY or BETTER_AUTH_SECRET.",
++      );
++    }
++
++    // Local development without any secret: nothing worth protecting.
++    return Buffer.from(
++      hkdfSync("sha256", "pactora-development", "", KEY_CONTEXT, 32),
++    );
++  }
++
++  return Buffer.from(hkdfSync("sha256", secret, "", KEY_CONTEXT, 32));
++}
++
++function keyId(key: Buffer): string {
++  return createHash("sha256").update(key).digest("base64url").slice(0, 8);
++}
++
++type SealOptions = {
++  /** What the value belongs to, such as "email-account:<id>". */
++  context: string;
++  env?: EnvSource;
++  key?: Buffer;
++};
++
++export function sealSecret(
++  plaintext: string,
++  { context, env, key = resolveCredentialsKey(env) }: SealOptions,
++): string {
++  const iv = randomBytes(12);
++  const cipher = createCipheriv("aes-256-gcm", key, iv);
++
++  cipher.setAAD(Buffer.from(context, "utf8"));
++
++  const body = Buffer.concat([cipher.update(plaintext, "utf8"), cipher.final()]);
++
++  return [
++    FORMAT_VERSION,
++    keyId(key),
++    iv.toString("base64url"),
++    cipher.getAuthTag().toString("base64url"),
++    body.toString("base64url"),
++  ].join(".");
++}
++
++/** The plaintext, or an EmailCredentialsError saying why it cannot be had. */
++export function openSecret(
++  sealed: string,
++  { context, env, key = resolveCredentialsKey(env) }: SealOptions,
++): string {
++  const parts = sealed.split(".");
++
++  if (parts.length !== 5 || parts[0] !== FORMAT_VERSION) {
++    throw new EmailCredentialsError("malformed");
++  }
++
++  const [, sealedKeyId, iv, tag, body] = parts as [
++    string,
++    string,
++    string,
++    string,
++    string,
++  ];
++
++  if (sealedKeyId !== keyId(key)) {
++    throw new EmailCredentialsError("other_key");
++  }
++
++  try {
++    // The tag length is fixed, so a shortened tag is refused rather than
++    // checked on fewer bytes.
++    const decipher = createDecipheriv(
++      "aes-256-gcm",
++      key,
++      Buffer.from(iv, "base64url"),
++      { authTagLength: 16 },
++    );
++
++    decipher.setAAD(Buffer.from(context, "utf8"));
++    decipher.setAuthTag(Buffer.from(tag, "base64url"));
++
++    return Buffer.concat([
++      decipher.update(Buffer.from(body, "base64url")),
++      decipher.final(),
++    ]).toString("utf8");
++  } catch {
++    throw new EmailCredentialsError("tampered");
++  }
++}
++
++export function sealJson(value: unknown, options: SealOptions): string {
++  return sealSecret(JSON.stringify(value), options);
++}
++
++export function openJson<T>(sealed: string, options: SealOptions): T {
++  return JSON.parse(openSecret(sealed, options)) as T;
++}
+diff --git a/src/lib/email/gmail.ts b/src/lib/email/gmail.ts
+new file mode 100644
+index 0000000..6ffb7cd
+--- /dev/null
++++ b/src/lib/email/gmail.ts
+@@ -0,0 +1,86 @@
++import { fetchFailure, kindForHttpStatus, retryAfterMs } from "./classify.ts";
++import { buildRawMime } from "./mime.ts";
++import {
++  EmailTransportError,
++  type EmailTransport,
++  type OutgoingMessage,
++} from "./types.ts";
++
++// Sends through the Gmail API (users.messages.send) with the mailbox's own
++// OAuth grant, scope gmail.send. The message goes up as raw MIME, so what
++// arrives is exactly what was composed.
++// https://developers.google.com/gmail/api/reference/rest/v1/users.messages/send
++
++export const GMAIL_API_BASE = "https://gmail.googleapis.com";
++
++/**
++ * Gmail takes messages up to 35 MB as sent; base64url makes the upload a
++ * third larger than the attachments, and the request is capped too, so
++ * attachments stay at 25 MB.
++ */
++export const GMAIL_MAX_ATTACHMENT_BYTES = 25 * 1024 * 1024;
++
++type GmailTransportOptions = {
++  apiBase?: string;
++  fetch?: typeof fetch;
++  /** A current access token; refreshed by the caller when it runs out. */
++  getAccessToken: () => Promise<string>;
++};
++
++async function readError(response: Response): Promise<string> {
++  const body = (await response.json().catch(() => null)) as {
++    error?: { message?: string; status?: string };
++  } | null;
++
++  return (
++    body?.error?.message ??
++    `Gmail refused the message (HTTP ${String(response.status)}).`
++  );
++}
++
++export function createGmailTransport({
++  apiBase = GMAIL_API_BASE,
++  fetch: fetchImpl = fetch,
++  getAccessToken,
++}: GmailTransportOptions): EmailTransport {
++  return {
++    maxAttachmentBytes: GMAIL_MAX_ATTACHMENT_BYTES,
++    provider: "gmail",
++    async send(message: OutgoingMessage) {
++      const raw = (await buildRawMime(message)).toString("base64url");
++      const accessToken = await getAccessToken();
++      let response: Response;
++
++      try {
++        response = await fetchImpl(
++          `${apiBase}/gmail/v1/users/me/messages/send`,
++          {
++            body: JSON.stringify({ raw }),
++            headers: {
++              authorization: `Bearer ${accessToken}`,
++              "content-type": "application/json",
++            },
++            method: "POST",
++            signal: AbortSignal.timeout(30_000),
++          },
++        );
++      } catch (error) {
++        throw fetchFailure(error, "Gmail");
++      }
++
++      if (!response.ok) {
++        throw new EmailTransportError(await readError(response), {
++          kind: kindForHttpStatus(response.status),
++          retryAfterMs: retryAfterMs(response.headers.get("retry-after")),
++          statusCode: response.status,
++        });
++      }
++
++      const body = (await response.json().catch(() => null)) as {
++        id?: string;
++      } | null;
++
++      return { providerMessageId: body?.id };
++    },
++  };
++}
+diff --git a/src/lib/email/microsoft.ts b/src/lib/email/microsoft.ts
+new file mode 100644
+index 0000000..9b4df3f
+--- /dev/null
++++ b/src/lib/email/microsoft.ts
+@@ -0,0 +1,127 @@
++import { fetchFailure, kindForHttpStatus, retryAfterMs } from "./classify.ts";
++import {
++  EmailTransportError,
++  type EmailTransport,
++  type OutgoingMessage,
++} from "./types.ts";
++
++// Sends through Microsoft Graph (POST /me/sendMail) with the mailbox's own
++// OAuth grant, scope Mail.Send. Works for Microsoft 365 work and school
++// mailboxes and for Outlook.com / Hotmail.
++// https://learn.microsoft.com/graph/api/user-sendmail
++
++export const GRAPH_API_BASE = "https://graph.microsoft.com";
++
++/**
++ * Graph takes a request of up to 4 MB, attachments included, and the
++ * attachments go inline as base64. Kept at 3 MB of files; callers send
++ * download links instead when the files are larger (fitsAsAttachments).
++ */
++export const GRAPH_MAX_ATTACHMENT_BYTES = 3 * 1024 * 1024;
++
++type MicrosoftTransportOptions = {
++  apiBase?: string;
++  fetch?: typeof fetch;
++  getAccessToken: () => Promise<string>;
++};
++
++export function buildGraphSendMailBody(message: OutgoingMessage) {
++  return {
++    message: {
++      attachments: message.attachments.map((attachment) => ({
++        "@odata.type": "#microsoft.graph.fileAttachment",
++        contentBytes: Buffer.from(attachment.content).toString("base64"),
++        contentType: attachment.contentType,
++        name: attachment.filename,
++      })),
++      body: message.htmlBody
++        ? { content: message.htmlBody, contentType: "HTML" }
++        : { content: message.textBody, contentType: "Text" },
++      ...(message.replyTo
++        ? { replyTo: [{ emailAddress: { address: message.replyTo } }] }
++        : {}),
++      subject: message.subject,
++      toRecipients: [{ emailAddress: { address: message.to } }],
++    },
++    saveToSentItems: true,
++  };
++}
++
++async function readError(response: Response): Promise<{
++  code: string | null;
++  message: string;
++}> {
++  const body = (await response.json().catch(() => null)) as {
++    error?: { code?: string; message?: string };
++  } | null;
++
++  return {
++    code: body?.error?.code ?? null,
++    message:
++      body?.error?.message ??
++      `Microsoft refused the message (HTTP ${String(response.status)}).`,
++  };
++}
++
++export function createMicrosoftTransport({
++  apiBase = GRAPH_API_BASE,
++  fetch: fetchImpl = fetch,
++  getAccessToken,
++}: MicrosoftTransportOptions): EmailTransport {
++  return {
++    maxAttachmentBytes: GRAPH_MAX_ATTACHMENT_BYTES,
++    provider: "microsoft",
++    async send(message: OutgoingMessage) {
++      const size = message.attachments.reduce(
++        (total, attachment) => total + attachment.content.byteLength,
++        0,
++      );
++
++      if (size > GRAPH_MAX_ATTACHMENT_BYTES) {
++        throw new EmailTransportError(
++          "The attachments are too large for Microsoft to send. Send download links instead.",
++          { code: "attachments_too_large", kind: "permanent" },
++        );
++      }
++
++      const accessToken = await getAccessToken();
++      let response: Response;
++
++      try {
++        response = await fetchImpl(`${apiBase}/v1.0/me/sendMail`, {
++          body: JSON.stringify(buildGraphSendMailBody(message)),
++          headers: {
++            authorization: `Bearer ${accessToken}`,
++            "content-type": "application/json",
++          },
++          method: "POST",
++          signal: AbortSignal.timeout(30_000),
++        });
++      } catch (error) {
++        throw fetchFailure(error, "Microsoft Graph");
++      }
++
++      if (!response.ok) {
++        const { code, message: text } = await readError(response);
++
++        throw new EmailTransportError(text, {
++          code,
++          // A mailbox without an Exchange Online licence, or one whose
++          // sending was blocked, answers 403 too: either way the account
++          // has to be looked at, not the message.
++          kind: kindForHttpStatus(response.status),
++          retryAfterMs: retryAfterMs(response.headers.get("retry-after")),
++          statusCode: response.status,
++        });
++      }
++
++      // 202 Accepted, with no body and no message id. Graph's request id
++      // is what Microsoft support asks for, so that is kept instead.
++      const requestId = response.headers.get("request-id");
++
++      return {
++        providerMessageId: requestId ? `graph-request-${requestId}` : undefined,
++      };
++    },
++  };
++}
+diff --git a/src/lib/email/mime.ts b/src/lib/email/mime.ts
+new file mode 100644
+index 0000000..715e7f2
+--- /dev/null
++++ b/src/lib/email/mime.ts
+@@ -0,0 +1,27 @@
++import MailComposer from "nodemailer/lib/mail-composer";
++
++import { type OutgoingMessage } from "./types.ts";
++
++/** The message as nodemailer takes it, for SMTP and for raw MIME. */
++export function toNodemailerMessage(message: OutgoingMessage) {
++  return {
++    attachments: message.attachments.map((attachment) => ({
++      content: Buffer.from(attachment.content),
++      contentType: attachment.contentType,
++      filename: attachment.filename,
++    })),
++    from: message.from.name
++      ? { address: message.from.address, name: message.from.name }
++      : message.from.address,
++    html: message.htmlBody,
++    replyTo: message.replyTo ?? undefined,
++    subject: message.subject,
++    text: message.textBody,
++    to: message.to,
++  };
++}
++
++/** The whole message as RFC 5322 bytes, as Gmail's API takes it. */
++export async function buildRawMime(message: OutgoingMessage): Promise<Buffer> {
++  return new MailComposer(toNodemailerMessage(message)).compile().build();
++}
+diff --git a/src/lib/email/presets.ts b/src/lib/email/presets.ts
+new file mode 100644
+index 0000000..3f41408
+--- /dev/null
++++ b/src/lib/email/presets.ts
+@@ -0,0 +1,281 @@
++import { readEnv, type EnvSource } from "../utils/env.ts";
++
++// The mailboxes PACTORA can send through, and what each one needs.
++//
++// Google and Microsoft mailboxes are connected with OAuth only: PACTORA
++// never asks for a Google or Microsoft password. Yahoo and iCloud take an
++// app password over SMTP, because their normal passwords do not work for
++// SMTP once two-step sign-in is on. A new provider implements
++// EmailTransport and adds a preset here.
++
++export const PROVIDER_PRESET_IDS = [
++  "gmail",
++  "google_workspace",
++  "microsoft365",
++  "outlook",
++  "zoho",
++  "yahoo",
++  "icloud",
++  "smtp",
++  "resend",
++] as const;
++
++export type ProviderPresetId = (typeof PROVIDER_PRESET_IDS)[number];
++export type AccountProvider = "gmail" | "microsoft" | "smtp" | "resend";
++export type SmtpSecurity = "tls" | "starttls";
++export type OAuthProviderName = "google" | "microsoft";
++
++export type ProviderPreset = {
++  appPasswordRequired: boolean;
++  /**
++   * Conservative messages per rolling 24 hours, from the provider's
++   * published limits. Null where the provider sets none that applies, or
++   * the administrator sets it (custom SMTP).
++   */
++  dailyLimit: number | null;
++  helpUrl: string | null;
++  id: ProviderPresetId;
++  method: "oauth" | "smtp" | "api";
++  name: string;
++  oauth: OAuthProviderName | null;
++  perMinuteLimit: number | null;
++  provider: AccountProvider;
++  /** The hosts that may be chosen for this preset, the first the default. */
++  smtpHosts: readonly string[];
++  smtpDefaults: { host: string; port: number; security: SmtpSecurity } | null;
++  /** The SMTP user name is always the full email address. */
++  usernameIsAddress: boolean;
++};
++
++export const PROVIDER_PRESETS: Record<ProviderPresetId, ProviderPreset> = {
++  gmail: {
++    appPasswordRequired: false,
++    // https://support.google.com/mail/answer/22839
++    dailyLimit: 500,
++    helpUrl: "https://support.google.com/accounts/answer/3466521",
++    id: "gmail",
++    method: "oauth",
++    name: "Gmail",
++    oauth: "google",
++    perMinuteLimit: null,
++    provider: "gmail",
++    smtpDefaults: null,
++    smtpHosts: [],
++    usernameIsAddress: false,
++  },
++  google_workspace: {
++    appPasswordRequired: false,
++    // https://support.google.com/a/answer/166852
++    dailyLimit: 2000,
++    helpUrl: "https://support.google.com/a/answer/7281227",
++    id: "google_workspace",
++    method: "oauth",
++    name: "Google Workspace",
++    oauth: "google",
++    perMinuteLimit: null,
++    provider: "gmail",
++    smtpDefaults: null,
++    smtpHosts: [],
++    usernameIsAddress: false,
++  },
++  microsoft365: {
++    appPasswordRequired: false,
++    // https://learn.microsoft.com/office365/servicedescriptions/exchange-online-service-description/exchange-online-limits#sending-limits
++    dailyLimit: 10000,
++    helpUrl:
++      "https://learn.microsoft.com/entra/identity/enterprise-apps/grant-admin-consent",
++    id: "microsoft365",
++    method: "oauth",
++    name: "Microsoft 365",
++    oauth: "microsoft",
++    perMinuteLimit: 30,
++    provider: "microsoft",
++    smtpDefaults: null,
++    smtpHosts: [],
++    usernameIsAddress: false,
++  },
++  outlook: {
++    appPasswordRequired: false,
++    // Outlook.com limits new and personal accounts well below Microsoft 365.
++    dailyLimit: 300,
++    helpUrl: "https://account.live.com/consent/Manage",
++    id: "outlook",
++    method: "oauth",
++    name: "Outlook.com / Hotmail",
++    oauth: "microsoft",
++    perMinuteLimit: 30,
++    provider: "microsoft",
++    smtpDefaults: null,
++    smtpHosts: [],
++    usernameIsAddress: false,
++  },
++  zoho: {
++    appPasswordRequired: false,
++    // Zoho's free and lite plans are limited; this stays well inside them.
++    dailyLimit: 250,
++    helpUrl: "https://www.zoho.com/mail/help/zoho-smtp.html",
++    id: "zoho",
++    method: "smtp",
++    name: "Zoho Mail",
++    oauth: null,
++    perMinuteLimit: null,
++    provider: "smtp",
++    smtpDefaults: { host: "smtp.zoho.com", port: 465, security: "tls" },
++    // Accounts in Zoho's EU and India data centres use their own hosts.
++    smtpHosts: ["smtp.zoho.com", "smtp.zoho.eu", "smtp.zoho.in"],
++    usernameIsAddress: true,
++  },
++  yahoo: {
++    appPasswordRequired: true,
++    dailyLimit: 500,
++    helpUrl: "https://help.yahoo.com/kb/SLN15241.html",
++    id: "yahoo",
++    method: "smtp",
++    name: "Yahoo Mail",
++    oauth: null,
++    perMinuteLimit: null,
++    provider: "smtp",
++    smtpDefaults: { host: "smtp.mail.yahoo.com", port: 465, security: "tls" },
++    smtpHosts: ["smtp.mail.yahoo.com"],
++    usernameIsAddress: true,
++  },
++  icloud: {
++    appPasswordRequired: true,
++    // https://support.apple.com/en-us/102198
++    dailyLimit: 1000,
++    helpUrl: "https://support.apple.com/en-us/102654",
++    id: "icloud",
++    method: "smtp",
++    name: "iCloud Mail",
++    oauth: null,
++    perMinuteLimit: null,
++    provider: "smtp",
++    smtpDefaults: { host: "smtp.mail.me.com", port: 587, security: "starttls" },
++    smtpHosts: ["smtp.mail.me.com"],
++    usernameIsAddress: true,
++  },
++  smtp: {
++    appPasswordRequired: false,
++    dailyLimit: null,
++    helpUrl: null,
++    id: "smtp",
++    method: "smtp",
++    name: "Other (SMTP)",
++    oauth: null,
++    perMinuteLimit: null,
++    provider: "smtp",
++    smtpDefaults: null,
++    smtpHosts: [],
++    usernameIsAddress: false,
++  },
++  resend: {
++    appPasswordRequired: false,
++    // Resend enforces its own quotas and says so when one is used up.
++    dailyLimit: null,
++    helpUrl: "https://resend.com/docs/dashboard/api-keys/introduction",
++    id: "resend",
++    method: "api",
++    name: "Resend",
++    oauth: null,
++    perMinuteLimit: null,
++    provider: "resend",
++    smtpDefaults: null,
++    smtpHosts: [],
++    usernameIsAddress: false,
++  },
++};
++
++export type ProviderOption = {
++  appPasswordRequired: boolean;
++  available: boolean;
++  helpUrl: string | null;
++  id: ProviderPresetId;
++  method: "oauth" | "smtp" | "api";
++  name: string;
++  smtpDefaults: ProviderPreset["smtpDefaults"];
++  unavailableReason: string | null;
++};
++
++export function isProviderPresetId(value: unknown): value is ProviderPresetId {
++  return (
++    typeof value === "string" &&
++    (PROVIDER_PRESET_IDS as readonly string[]).includes(value)
++  );
++}
++
++export function getPreset(id: ProviderPresetId): ProviderPreset {
++  return PROVIDER_PRESETS[id];
++}
++
++export type OAuthClientConfig = {
++  clientId: string;
++  clientSecret: string;
++  /** Microsoft only: the tenant to sign in against. */
++  tenant: string;
++};
++
++const OAUTH_ENV = {
++  google: ["GOOGLE_CLIENT_ID", "GOOGLE_CLIENT_SECRET"],
++  microsoft: ["MICROSOFT_CLIENT_ID", "MICROSOFT_CLIENT_SECRET"],
++} as const;
++
++/** The OAuth app's credentials, or null when the administrator has set none. */
++export function readOAuthClient(
++  provider: OAuthProviderName,
++  env: EnvSource = process.env,
++): OAuthClientConfig | null {
++  const [idName, secretName] = OAUTH_ENV[provider];
++  const clientId = readEnv(env, idName);
++  const clientSecret = readEnv(env, secretName);
++
++  if (!clientId || !clientSecret) {
++    return null;
++  }
++
++  return {
++    clientId,
++    clientSecret,
++    tenant:
++      provider === "microsoft"
++        ? (readEnv(env, "MICROSOFT_TENANT_ID") ?? "common")
++        : "",
++  };
++}
++
++export function unavailableReasonFor(
++  preset: ProviderPreset,
++  env: EnvSource = process.env,
++): string | null {
++  if (!preset.oauth || readOAuthClient(preset.oauth, env)) {
++    return null;
++  }
++
++  const [idName, secretName] = OAUTH_ENV[preset.oauth];
++
++  return `Awaiting administrator configuration: set ${idName} and ${secretName}`;
++}
++
++export function listProviderOptions(
++  env: EnvSource = process.env,
++): ProviderOption[] {
++  return PROVIDER_PRESET_IDS.map((id) => {
++    const preset = PROVIDER_PRESETS[id];
++    const unavailableReason = unavailableReasonFor(preset, env);
++
++    return {
++      appPasswordRequired: preset.appPasswordRequired,
++      available: unavailableReason === null,
++      helpUrl: preset.helpUrl,
++      id,
++      method: preset.method,
++      name: preset.name,
++      smtpDefaults: preset.smtpDefaults,
++      unavailableReason,
++    };
++  });
++}
++
++/** What a provider calls the place its mailbox is reconnected. */
++export function reconnectRecovery(preset: ProviderPreset): string {
++  return `Reconnect the ${preset.name} account in Settings > Email & Integrations.`;
++}
+diff --git a/src/lib/email/resend.ts b/src/lib/email/resend.ts
+new file mode 100644
+index 0000000..42e2684
+--- /dev/null
++++ b/src/lib/email/resend.ts
+@@ -0,0 +1,232 @@
++import { Resend } from "resend";
++
++import { kindForHttpStatus, retryAfterMs } from "./classify.ts";
++import {
++  EmailTransportError,
++  type EmailTransport,
++  type MailboxAddress,
++  type OutgoingMessage,
++} from "./types.ts";
++
++// Resend, with its API key: either the install's RESEND_API_KEY or an
++// account connected in Settings > Email & Integrations.
++
++/**
++ * Resend accepts up to 40 MB per message once attachments are base64
++ * encoded, which makes them a third larger.
++ */
++export const RESEND_MAX_ATTACHMENT_BYTES = 25 * 1024 * 1024;
++
++/** How often a message Resend turned away for rate is tried again. */
++const RATE_LIMIT_RETRIES = 3;
++const DEFAULT_RATE_LIMIT_WAIT_MS = 1_000;
++const MAX_RATE_LIMIT_WAIT_MS = 5_000;
++
++type ResendError = { message?: string; name?: string; statusCode?: number | null };
++
++type ResendResult = {
++  error: ResendError | null;
++  headers: Record<string, string> | null;
++};
++
++export type ResendClient = Pick<Resend, "batch" | "emails">;
++
++function rateLimitWaitMs(headers: Record<string, string> | null): number {
++  const seconds = Number(headers?.["retry-after"]);
++
++  return Number.isFinite(seconds) && seconds > 0
++    ? Math.min(seconds * 1000, MAX_RATE_LIMIT_WAIT_MS)
++    : DEFAULT_RATE_LIMIT_WAIT_MS;
++}
++
++/**
++ * Resend allows a team so many requests a second, across everything that
++ * uses its key. A request over that is refused, not queued, so it is tried
++ * again after the wait Resend names. A used-up daily or monthly quota is
++ * also a 429, and is not retried here: a second's wait does not bring it
++ * back.
++ */
++async function sendWithinRateLimit<T extends ResendResult>(
++  request: () => Promise<T>,
++  wait: (milliseconds: number) => Promise<void>,
++): Promise<T> {
++  for (let attempt = 0; ; attempt += 1) {
++    const result = await request();
++
++    if (
++      result.error?.name !== "rate_limit_exceeded" ||
++      attempt >= RATE_LIMIT_RETRIES
++    ) {
++      return result;
++    }
++
++    await wait(rateLimitWaitMs(result.headers));
++  }
++}
++
++export function waitFor(milliseconds: number): Promise<void> {
++  return new Promise((resolve) => {
++    setTimeout(resolve, milliseconds);
++  });
++}
++
++const AUTH_ERRORS = new Set([
++  "invalid_api_key",
++  "missing_api_key",
++  "restricted_api_key",
++  "invalid_access",
++]);
++
++/** Resend's error as an EmailTransportError of the right kind. */
++export function toResendError(
++  error: ResendError,
++  headers: Record<string, string> | null = null,
++): EmailTransportError {
++  const status = typeof error.statusCode === "number" ? error.statusCode : null;
++  const name = error.name ?? null;
++  let kind = status === null ? "transient" : kindForHttpStatus(status);
++
++  if (name && AUTH_ERRORS.has(name)) {
++    kind = "auth";
++  } else if (
++    name === "rate_limit_exceeded" ||
++    name === "daily_quota_exceeded" ||
++    name === "monthly_quota_exceeded" ||
++    name === "application_error" ||
++    name === "internal_server_error"
++  ) {
++    kind = "transient";
++  } else if (name === "validation_error" || name === "invalid_from_address") {
++    // An unverified domain, a malformed address: the message will not go
++    // out like this, however often it is tried.
++    kind = "permanent";
++  }
++
++  return new EmailTransportError(error.message || "Email delivery failed.", {
++    code: name,
++    kind: kind as EmailTransportError["kind"],
++    retryAfterMs: retryAfterMs(headers?.["retry-after"]),
++    statusCode: status,
++  });
++}
++
++/** "Name <address>", quoting the name when it needs it. */
++export function formatMailbox({ address, name }: MailboxAddress): string {
++  if (!name) {
++    return address;
++  }
++
++  const quoted = /[",.;:<>@()[\]\\]/.test(name)
++    ? `"${name.replace(/["\\]/g, "\\$&")}"`
++    : name;
++
++  return `${quoted} <${address}>`;
++}
++
++export function buildResendPayload(message: OutgoingMessage) {
++  return {
++    ...(message.attachments.length
++      ? {
++          attachments: message.attachments.map((attachment) => ({
++            content: Buffer.from(attachment.content),
++            contentType: attachment.contentType,
++            filename: attachment.filename,
++          })),
++        }
++      : {}),
++    from: formatMailbox(message.from),
++    html: message.htmlBody,
++    replyTo: message.replyTo ?? undefined,
++    subject: message.subject,
++    tags: [{ name: "category", value: message.template }],
++    text: message.textBody,
++    to: [message.to],
++  };
++}
++
++export type ResendTransport = EmailTransport & {
++  sendBatch(
++    messages: readonly OutgoingMessage[],
++    idempotencyKey?: string,
++  ): Promise<{ providerMessageId?: string }[]>;
++};
++
++export function createResendTransport({
++  apiKey,
++  client,
++  wait = waitFor,
++}: {
++  apiKey?: string;
++  client?: ResendClient;
++  wait?: (milliseconds: number) => Promise<void>;
++}): ResendTransport {
++  const resend = client ?? new Resend(apiKey);
++
++  return {
++    maxAttachmentBytes: RESEND_MAX_ATTACHMENT_BYTES,
++    provider: "resend",
++    async send(message) {
++      const result = await sendWithinRateLimit(
++        () =>
++          resend.emails.send(
++            buildResendPayload(message),
++            message.idempotencyKey
++              ? { idempotencyKey: message.idempotencyKey }
++              : undefined,
++          ) as Promise<ResendResult & { data: { id: string } | null }>,
++        wait,
++      );
++
++      if (result.error) {
++        throw toResendError(result.error, result.headers);
++      }
++
++      return { providerMessageId: result.data?.id };
++    },
++    async sendBatch(messages, idempotencyKey) {
++      if (messages.length === 0) {
++        return [];
++      }
++
++      const result = await sendWithinRateLimit(
++        () =>
++          resend.batch.send(
++            messages.map((message) => buildResendPayload(message)),
++            idempotencyKey ? { idempotencyKey } : undefined,
++          ) as Promise<
++            ResendResult & { data: { data: { id: string }[] } | null }
++          >,
++        wait,
++      );
++
++      if (result.error) {
++        throw toResendError(result.error, result.headers);
++      }
++
++      return messages.map((_, index) => ({
++        providerMessageId: result.data?.data[index]?.id,
++      }));
++    },
++  };
++}
++
++/**
++ * Whether this API key belongs to a Resend account. A key that may only
++ * send cannot list domains, and says so: that still proves the key is real.
++ */
++export async function verifyResendApiKey(
++  apiKey: string,
++  client: Pick<Resend, "domains"> = new Resend(apiKey),
++): Promise<void> {
++  const result = await client.domains.list();
++
++  // Resend uses this name twice: with 401 for a key that may only send,
++  // and with 403 for a key that has been switched off.
++  const sendOnly =
++    result.error?.name === "restricted_api_key" &&
++    (result.error as ResendError).statusCode !== 403;
++
++  if (result.error && !sendOnly) {
++    throw toResendError(result.error as ResendError);
++  }
++}
+diff --git a/src/lib/email/smtp.ts b/src/lib/email/smtp.ts
+new file mode 100644
+index 0000000..5da678a
+--- /dev/null
++++ b/src/lib/email/smtp.ts
+@@ -0,0 +1,310 @@
++import { lookup as dnsLookup } from "node:dns/promises";
++import { isIP } from "node:net";
++
++import nodemailer from "nodemailer";
++
++import { isPrivateAddress } from "../services/private-address.ts";
++import { readEnv, type EnvSource } from "../utils/env.ts";
++import { kindForSmtpError } from "./classify.ts";
++import { toNodemailerMessage } from "./mime.ts";
++import { type SmtpSecurity } from "./presets.ts";
++import {
++  EmailTransportError,
++  type EmailTransport,
++  type OutgoingMessage,
++} from "./types.ts";
++
++// SMTP through nodemailer, for Zoho, Yahoo, iCloud and any other server.
++//
++// The server's name comes from whoever connects the account, so it is
++// treated like any other address from outside:
++//
++// - Only the mail ports (25, 465, 587, 2525), and only with TLS: implicit
++//   TLS on 465, or STARTTLS that must succeed (requireTLS) elsewhere.
++// - The name is looked up once, and an address in a private, loopback or
++//   link-local range is refused (SMTP_ALLOW_PRIVATE_HOSTS=1 allows them
++//   for a relay on the operator's own network, and for tests).
++// - The connection is made to that one address, with the original name as
++//   the TLS server name, so the certificate is still checked against the
++//   name. A second lookup that answers differently (DNS rebinding) is
++//   never made.
++
++export const ALLOWED_SMTP_PORTS = [25, 465, 587, 2525] as const;
++
++/** Most servers take 25 MB or more; base64 grows it by a third on the wire. */
++export const SMTP_MAX_ATTACHMENT_BYTES = 18 * 1024 * 1024;
++
++const CONNECTION_TIMEOUT_MS = 15_000;
++const GREETING_TIMEOUT_MS = 15_000;
++const SOCKET_TIMEOUT_MS = 30_000;
++
++export type SmtpSettings = {
++  host: string;
++  password: string;
++  port: number;
++  security: SmtpSecurity;
++  username: string;
++};
++
++export type ResolveAddresses = (
++  host: string,
++) => Promise<{ address: string; family: number }[]>;
++
++export type SmtpTransportOptions = {
++  env?: EnvSource;
++  /** Replaced in tests to answer like a DNS server would. */
++  lookup?: ResolveAddresses;
++  /**
++   * Internal, for tests: a certificate authority to trust for this
++   * connection only, so a local test server's own certificate verifies.
++   * Verification itself is never turned off.
++   */
++  trustedCa?: string;
++};
++
++const defaultLookup: ResolveAddresses = (host) =>
++  dnsLookup(host, { all: true, verbatim: true });
++
++const HOST_PATTERN =
++  /^(?=.{1,253}$)(?:[a-z0-9](?:[a-z0-9-]{0,61}[a-z0-9])?\.)*[a-z0-9](?:[a-z0-9-]{0,61}[a-z0-9])?$/;
++
++export function normalizeSmtpHost(host: string): string {
++  return host.trim().toLowerCase().replace(/\.$/, "");
++}
++
++/** What is wrong with these settings, field by field; empty when nothing. */
++export function checkSmtpEndpoint(input: {
++  host: string;
++  port: number;
++  security: SmtpSecurity;
++}): Record<string, string> {
++  const errors: Record<string, string> = {};
++  const host = normalizeSmtpHost(input.host);
++
++  if (!host || (!isIP(host.replace(/^\[|\]$/g, "")) && !HOST_PATTERN.test(host))) {
++    errors.host = "Enter the SMTP server's host name, such as smtp.example.com.";
++  }
++
++  if (!(ALLOWED_SMTP_PORTS as readonly number[]).includes(input.port)) {
++    errors.port = "Use port 465 (TLS), 587 (STARTTLS), 25 or 2525.";
++  } else if (input.port === 465 && input.security !== "tls") {
++    errors.security = "Port 465 uses TLS from the start. Choose TLS.";
++  } else if (input.port !== 465 && input.security === "tls") {
++    errors.security = `Port ${String(input.port)} uses STARTTLS. Choose STARTTLS, or port 465 for TLS.`;
++  }
++
++  return errors;
++}
++
++function refused(message: string): EmailTransportError {
++  return new EmailTransportError(message, {
++    code: "smtp_host_refused",
++    kind: "permanent",
++  });
++}
++
++/**
++ * The one address this host is dialled at. Looked up once; refused when
++ * it is private and private hosts are not allowed.
++ */
++export async function resolveSmtpAddress(
++  host: string,
++  { env = process.env, lookup = defaultLookup }: SmtpTransportOptions = {},
++): Promise<string> {
++  const name = normalizeSmtpHost(host).replace(/^\[|\]$/g, "");
++  const allowPrivate = readEnv(env, "SMTP_ALLOW_PRIVATE_HOSTS") === "1";
++  let addresses: string[];
++
++  if (isIP(name)) {
++    addresses = [name];
++  } else {
++    if (!allowPrivate && isPrivateAddress(name)) {
++      throw refused(`${name} is a local address. Use the mail server's public name.`);
++    }
++
++    try {
++      addresses = (await lookup(name)).map((entry) => entry.address);
++    } catch (error) {
++      const code = (error as { code?: unknown }).code;
++
++      throw new EmailTransportError(
++        code === "ENOTFOUND" || code === "ENODATA"
++          ? `The SMTP server ${name} was not found. Check its name.`
++          : `The SMTP server ${name} could not be looked up.`,
++        {
++          code: typeof code === "string" ? code : "EDNS",
++          kind:
++            code === "ENOTFOUND" || code === "ENODATA" ? "permanent" : "transient",
++        },
++      );
++    }
++  }
++
++  const usable = allowPrivate
++    ? addresses
++    : addresses.filter((address) => !isPrivateAddress(address));
++
++  if (usable.length === 0) {
++    throw refused(
++      addresses.length === 0
++        ? `The SMTP server ${name} has no address.`
++        : `${name} points to a private network address, which PACTORA does not connect to.`,
++    );
++  }
++
++  return usable[0]!;
++}
++
++function buildNodemailerOptions(
++  settings: SmtpSettings,
++  address: string,
++  options: SmtpTransportOptions,
++) {
++  const host = normalizeSmtpHost(settings.host).replace(/^\[|\]$/g, "");
++  const servername = isIP(host) ? undefined : host;
++
++  return {
++    auth: { pass: settings.password, user: settings.username },
++    connectionTimeout: CONNECTION_TIMEOUT_MS,
++    greetingTimeout: GREETING_TIMEOUT_MS,
++    // The address looked up above, never the name: see the top of the file.
++    host: address,
++    ignoreTLS: false,
++    port: settings.port,
++    requireTLS: settings.security === "starttls",
++    secure: settings.security === "tls",
++    servername,
++    socketTimeout: SOCKET_TIMEOUT_MS,
++    tls: {
++      ...(options.trustedCa ? { ca: [options.trustedCa] } : {}),
++      minVersion: "TLSv1.2" as const,
++      rejectUnauthorized: true,
++      servername,
++    },
++  };
++}
++
++function describeSmtpError(error: unknown, host: string): string {
++  const code = (error as { code?: unknown }).code;
++  const response = (error as { response?: unknown }).response;
++
++  if (code === "EAUTH") {
++    return `${host} did not accept the user name and password${
++      typeof response === "string" ? ` (${response.slice(0, 200)})` : ""
++    }.`;
++  }
++
++  if (code === "ETLS" || /certificate|self.signed|altnames/i.test(String((error as Error).message))) {
++    return `The TLS connection to ${host} could not be verified: ${(error as Error).message}`;
++  }
++
++  if (code === "ETIMEDOUT") {
++    return `${host} did not answer in time.`;
++  }
++
++  if (code === "ECONNECTION" || code === "ECONNREFUSED" || code === "ESOCKET") {
++    return `Could not connect to ${host}: ${(error as Error).message}`;
++  }
++
++  return error instanceof Error && error.message
++    ? error.message
++    : `${host} refused the message.`;
++}
++
++function toSmtpError(error: unknown, host: string): EmailTransportError {
++  if (error instanceof EmailTransportError) {
++    return error;
++  }
++
++  const code = (error as { code?: unknown }).code;
++  const responseCode = (error as { responseCode?: unknown }).responseCode;
++
++  return new EmailTransportError(describeSmtpError(error, host), {
++    code: typeof code === "string" ? code : null,
++    kind: kindForSmtpError(error),
++    statusCode: typeof responseCode === "number" ? responseCode : null,
++  });
++}
++
++async function withConnection<T>(
++  settings: SmtpSettings,
++  options: SmtpTransportOptions,
++  run: (transporter: nodemailer.Transporter) => Promise<T>,
++): Promise<T> {
++  const endpointErrors = checkSmtpEndpoint(settings);
++  const firstError = Object.values(endpointErrors)[0];
++
++  if (firstError) {
++    throw refused(firstError);
++  }
++
++  const address = await resolveSmtpAddress(settings.host, options);
++  const transporter = nodemailer.createTransport(
++    buildNodemailerOptions(settings, address, options),
++  );
++
++  try {
++    return await run(transporter);
++  } catch (error) {
++    throw toSmtpError(error, normalizeSmtpHost(settings.host));
++  } finally {
++    transporter.close();
++  }
++}
++
++/** Connects, starts TLS and signs in, without sending anything. */
++export async function verifySmtpSettings(
++  settings: SmtpSettings,
++  options: SmtpTransportOptions = {},
++): Promise<void> {
++  await withConnection(settings, options, async (transporter) => {
++    await transporter.verify();
++  });
++}
++
++export function createSmtpTransport(
++  settings: SmtpSettings,
++  options: SmtpTransportOptions = {},
++): EmailTransport {
++  return {
++    maxAttachmentBytes: SMTP_MAX_ATTACHMENT_BYTES,
++    provider: "smtp",
++    send: (message: OutgoingMessage) =>
++      withConnection(settings, options, async (transporter) => {
++        const info = (await transporter.sendMail(
++          toNodemailerMessage(message),
++        )) as { messageId?: string; rejected?: unknown[] };
++
++        if (Array.isArray(info.rejected) && info.rejected.length > 0) {
++          throw new EmailTransportError(
++            `${normalizeSmtpHost(settings.host)} refused the recipient ${message.to}.`,
++            { code: "EENVELOPE", kind: "permanent" },
++          );
++        }
++
++        return { providerMessageId: info.messageId };
++      }),
++  };
++}
++
++/**
++ * PLATFORM_SMTP_URL: smtps://user:password@host:465 for implicit TLS, or
++ * smtp://user:password@host:587 for STARTTLS (always required).
++ */
++export function parseSmtpUrl(value: string): SmtpSettings {
++  const url = new URL(value);
++
++  if (url.protocol !== "smtps:" && url.protocol !== "smtp:") {
++    throw new Error("PLATFORM_SMTP_URL must start with smtps:// or smtp://.");
++  }
++
++  const security: SmtpSecurity = url.protocol === "smtps:" ? "tls" : "starttls";
++
++  return {
++    host: url.hostname,
++    password: decodeURIComponent(url.password),
++    port: url.port ? Number(url.port) : security === "tls" ? 465 : 587,
++    security,
++    username: decodeURIComponent(url.username),
++  };
++}
+diff --git a/src/lib/email/templates.ts b/src/lib/email/templates.ts
+new file mode 100644
+index 0000000..fa5b749
+--- /dev/null
++++ b/src/lib/email/templates.ts
+@@ -0,0 +1,264 @@
++import { getDb, queryMany, queryOne, type DbExecutor } from "../db/connection.ts";
++import { escapeHtml } from "../utils/html.ts";
++
++// An organisation's own wording for a few messages: the subject and the
++// opening paragraph. Everything else in the message (the greeting, the
++// links, the deadline, the legal footer) stays as PACTORA writes it, so a
++// template can never drop a signing link or a required notice.
++//
++// Placeholders are filled in from what PACTORA knows about the message and
++// HTML-escaped in the HTML part, so nothing typed into a document title or
++// a name can add markup.
++
++export const EDITABLE_TEMPLATE_KINDS = [
++  "signing_invitation",
++  "automatic_reminder",
++  "manual_nudge",
++  "completion_notification",
++  "workspace_invitation",
++] as const;
++
++export type EditableTemplateKind = (typeof EDITABLE_TEMPLATE_KINDS)[number];
++
++export const TEMPLATE_PLACEHOLDERS = [
++  "sender_name",
++  "document_title",
++  "organization_name",
++  "recipient_name",
++] as const;
++
++export type TemplatePlaceholder = (typeof TEMPLATE_PLACEHOLDERS)[number];
++export type TemplateVariables = Partial<Record<TemplatePlaceholder, string>>;
++
++export type TemplateCopy = { intro: string; subject: string };
++
++/** Today's wording, written with placeholders. The signer's version. */
++export const DEFAULT_TEMPLATE_COPY: Record<EditableTemplateKind, TemplateCopy> = {
++  automatic_reminder: {
++    intro:
++      '{{sender_name}} is still waiting for your signature on "{{document_title}}", sent through {{organization_name}}.',
++    subject:
++      'Reminder: {{sender_name}} is waiting for your signature on "{{document_title}}"',
++  },
++  completion_notification: {
++    intro:
++      '"{{document_title}}" from {{sender_name}} has been fully signed in {{organization_name}}.',
++    subject: '"{{document_title}}" is fully signed',
++  },
++  manual_nudge: {
++    intro:
++      '{{sender_name}} sent you a reminder to sign "{{document_title}}" through {{organization_name}}.',
++    subject: '{{sender_name}} sent you a reminder to sign "{{document_title}}"',
++  },
++  signing_invitation: {
++    intro:
++      '{{sender_name}} sent you "{{document_title}}" through {{organization_name}}.',
++    subject:
++      '{{sender_name}} requested your signature on "{{document_title}}"',
++  },
++  workspace_invitation: {
++    intro: "{{sender_name}} invited you to join {{organization_name}}.",
++    subject: "{{sender_name}} invited you to {{organization_name}}",
++  },
++};
++
++export function isEditableTemplateKind(
++  value: unknown,
++): value is EditableTemplateKind {
++  return (
++    typeof value === "string" &&
++    (EDITABLE_TEMPLATE_KINDS as readonly string[]).includes(value)
++  );
++}
++
++const PLACEHOLDER_PATTERN = /\{\{\s*([a-z_]+)\s*\}\}/g;
++
++/** The placeholders a text uses that PACTORA does not know. */
++export function unknownPlaceholders(text: string): string[] {
++  return [...text.matchAll(PLACEHOLDER_PATTERN)]
++    .map((match) => match[1]!)
++    .filter(
++      (name) => !(TEMPLATE_PLACEHOLDERS as readonly string[]).includes(name),
++    );
++}
++
++function fill(
++  text: string,
++  variables: TemplateVariables,
++  encode: (value: string) => string,
++): string {
++  let result = "";
++  let last = 0;
++
++  for (const match of text.matchAll(PLACEHOLDER_PATTERN)) {
++    const value = variables[match[1] as TemplatePlaceholder];
++
++    result += encode(text.slice(last, match.index));
++    result += value === undefined ? encode(match[0]) : encode(value);
++    last = match.index + match[0].length;
++  }
++
++  return result + encode(text.slice(last));
++}
++
++/** For a subject or a plain-text body. Line breaks are not allowed in a subject. */
++export function renderTemplateText(
++  text: string,
++  variables: TemplateVariables,
++): string {
++  return fill(text, variables, (value) => value);
++}
++
++/** For the HTML part: the template's own text and every value escaped. */
++export function renderTemplateHtml(
++  text: string,
++  variables: TemplateVariables,
++): string {
++  return fill(text, variables, escapeHtml);
++}
++
++export function renderSubject(
++  text: string,
++  variables: TemplateVariables,
++): string {
++  return renderTemplateText(text, variables).replace(/[\r\n]+/g, " ").trim();
++}
++
++/**
++ * The organisation's wording for this kind of message, or null when it
++ * uses PACTORA's own. A database without the table, or one that cannot be
++ * read, means PACTORA's own: the wording is never a reason not to send.
++ */
++export async function getTemplateCopy(
++  kind: EditableTemplateKind,
++  database: DbExecutor | null = null,
++): Promise<TemplateCopy | null> {
++  try {
++    return await queryOne<TemplateCopy>(
++      database ?? getDb(),
++      `SELECT subject, intro FROM email_templates WHERE kind = $1`,
++      [kind],
++    );
++  } catch {
++    return null;
++  }
++}
++
++export type TemplateView = {
++  defaultIntro: string;
++  defaultSubject: string;
++  intro: string;
++  isCustomized: boolean;
++  kind: EditableTemplateKind;
++  placeholders: readonly TemplatePlaceholder[];
++  subject: string;
++  updatedAt: number | null;
++};
++
++export async function listTemplates(
++  database: DbExecutor = getDb(),
++): Promise<TemplateView[]> {
++  const rows = await queryMany<
++    TemplateCopy & { kind: EditableTemplateKind; updatedAt: number }
++  >(
++    database,
++    `SELECT kind, subject, intro, updated_at AS "updatedAt" FROM email_templates`,
++  );
++  const stored = new Map(rows.map((row) => [row.kind, row]));
++
++  return EDITABLE_TEMPLATE_KINDS.map((kind) => {
++    const row = stored.get(kind);
++    const defaults = DEFAULT_TEMPLATE_COPY[kind];
++
++    return {
++      defaultIntro: defaults.intro,
++      defaultSubject: defaults.subject,
++      intro: row?.intro ?? defaults.intro,
++      isCustomized: Boolean(row),
++      kind,
++      placeholders: TEMPLATE_PLACEHOLDERS,
++      subject: row?.subject ?? defaults.subject,
++      updatedAt: row?.updatedAt ?? null,
++    };
++  });
++}
++
++export class TemplateValidationError extends Error {
++  readonly fieldErrors: Record<string, string>;
++
++  constructor(fieldErrors: Record<string, string>) {
++    super(Object.values(fieldErrors)[0] ?? "Check the template.");
++    this.name = "TemplateValidationError";
++    this.fieldErrors = fieldErrors;
++  }
++}
++
++/**
++ * Saves the wording for one kind. Saving PACTORA's own wording, or empty
++ * text, goes back to it.
++ */
++export async function saveTemplate(
++  input: { intro: string; kind: EditableTemplateKind; subject: string },
++  userId: string,
++  database: DbExecutor = getDb(),
++): Promise<void> {
++  const subject = input.subject.trim();
++  const intro = input.intro.trim();
++  const defaults = DEFAULT_TEMPLATE_COPY[input.kind];
++  const fieldErrors: Record<string, string> = {};
++
++  if (subject.length > 200) {
++    fieldErrors.subject = "Keep the subject to 200 characters.";
++  } else if (/[\r\n]/.test(subject)) {
++    fieldErrors.subject = "A subject is one line.";
++  }
++
++  if (intro.length > 2000) {
++    fieldErrors.intro = "Keep the opening paragraph to 2,000 characters.";
++  }
++
++  for (const [field, text] of [
++    ["subject", subject],
++    ["intro", intro],
++  ] as const) {
++    const unknown = unknownPlaceholders(text);
++
++    if (unknown.length > 0 && !fieldErrors[field]) {
++      fieldErrors[field] =
++        `Unknown placeholder {{${unknown[0]!}}}. Use ${TEMPLATE_PLACEHOLDERS.map((name) => `{{${name}}}`).join(", ")}.`;
++    }
++  }
++
++  if (Object.keys(fieldErrors).length > 0) {
++    throw new TemplateValidationError(fieldErrors);
++  }
++
++  if (
++    (!subject && !intro) ||
++    (subject === defaults.subject && intro === defaults.intro)
++  ) {
++    await database.query(`DELETE FROM email_templates WHERE kind = $1`, [
++      input.kind,
++    ]);
++    return;
++  }
++
++  await database.query(
++    `
++      INSERT INTO email_templates (kind, subject, intro, updated_by_user_id, updated_at)
++      VALUES ($1, $2, $3, $4, $5)
++      ON CONFLICT (kind) DO UPDATE
++      SET subject = EXCLUDED.subject,
++          intro = EXCLUDED.intro,
++          updated_by_user_id = EXCLUDED.updated_by_user_id,
++          updated_at = EXCLUDED.updated_at
++    `,
++    [
++      input.kind,
++      subject || defaults.subject,
++      intro || defaults.intro,
++      userId,
++      Math.floor(Date.now() / 1000),
++    ],
++  );
++}
+diff --git a/src/lib/email/types.ts b/src/lib/email/types.ts
+new file mode 100644
+index 0000000..ed4dd12
+--- /dev/null
++++ b/src/lib/email/types.ts
+@@ -0,0 +1,112 @@
++import { type EmailTemplateKind } from "../types/domain.ts";
++
++// The shapes the email engine is built from. See
++// docs/pactora/v1.1-architecture.md, section 4.
++
++export type EmailAttachment = {
++  content: Uint8Array;
++  contentType: string;
++  filename: string;
++};
++
++export type TransactionalEmailMessage = {
++  /**
++   * The mailbox to send through, by id. Only test_email uses it: the
++   * sender must be allowed to use that account, or nothing is sent.
++   */
++  accountId?: string;
++  /** Not allowed in sendBatch: Resend's batch endpoint takes none. */
++  attachments?: EmailAttachment[];
++  /**
++   * The envelope the message is about. The router finds the sender from
++   * it when senderUserId is not given.
++   */
++  envelopeId?: string;
++  htmlBody?: string;
++  replyTo?: string;
++  /** The person on whose behalf agreement mail is sent. */
++  senderUserId?: string;
++  subject: string;
++  template: EmailTemplateKind;
++  textBody: string;
++  to: string;
++};
++
++export type EmailDeliveryResult = {
++  accepted: string[];
++  messageId?: string;
++  rejected: string[];
++};
++
++export type EmailSendOptions = {
++  idempotencyKey?: string;
++};
++
++export type EmailStream = "platform" | "agreement";
++
++export type TransportProvider =
++  | "gmail"
++  | "microsoft"
++  | "smtp"
++  | "resend"
++  | "capture";
++
++export type MailboxAddress = { address: string; name: string | null };
++
++/** A message with its sender identity settled, ready for a transport. */
++export type OutgoingMessage = {
++  attachments: EmailAttachment[];
++  from: MailboxAddress;
++  htmlBody?: string;
++  idempotencyKey?: string;
++  replyTo: string | null;
++  subject: string;
++  template: EmailTemplateKind;
++  textBody: string;
++  to: string;
++};
++
++export interface EmailTransport {
++  readonly provider: TransportProvider;
++  readonly maxAttachmentBytes: number;
++  send(message: OutgoingMessage): Promise<{ providerMessageId?: string }>;
++}
++
++/**
++ * - transient: worth trying again (network, timeouts, 429, 5xx, SMTP 4xx).
++ * - auth: the mailbox's credentials no longer work. Not tried again until
++ *   someone reconnects it.
++ * - permanent: trying again would fail the same way (a refused recipient,
++ *   a message the provider will not take).
++ */
++export type DeliveryFailureKind = "transient" | "auth" | "permanent";
++
++export class EmailTransportError extends Error {
++  readonly kind: DeliveryFailureKind;
++  readonly code: string | null;
++  readonly statusCode: number | null;
++  /** How long the provider asked to wait, when it said. */
++  readonly retryAfterMs: number | null;
++
++  constructor(
++    message: string,
++    {
++      code = null,
++      kind,
++      retryAfterMs = null,
++      statusCode = null,
++    }: {
++      code?: string | null;
++      kind: DeliveryFailureKind;
++      retryAfterMs?: number | null;
++      statusCode?: number | null;
++    },
++  ) {
++    super(message);
++    this.name = "EmailTransportError";
++    this.kind = kind;
++    this.code = code;
++    this.statusCode = statusCode;
++    this.retryAfterMs = retryAfterMs;
++  }
++}
