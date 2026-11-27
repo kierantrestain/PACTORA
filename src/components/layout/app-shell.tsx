@@ -32,7 +32,13 @@ type AppShellProps = {
 };
 
 type ShellSection =
-  "documents" | "new-envelope" | "settings" | "templates" | "workspace";
+  | "agreements"
+  | "builder"
+  | "documents"
+  | "new-envelope"
+  | "settings"
+  | "templates"
+  | "workspace";
 
 export function AppShell({
   children,
@@ -213,6 +219,14 @@ function resolveSection(pathname: string): ShellSection {
 
   if (pathname === "/templates" || pathname.startsWith("/templates/")) {
     return "templates";
+  }
+
+  if (pathname === "/builder" || pathname.startsWith("/builder/")) {
+    return "builder";
+  }
+
+  if (pathname === "/agreements" || pathname.startsWith("/agreements/")) {
+    return "agreements";
   }
 
   return "workspace";
