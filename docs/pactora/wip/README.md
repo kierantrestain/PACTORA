@@ -7,7 +7,7 @@ Merged and tested on this branch:
 - Google and Microsoft sign-in config with unverified-email (nOAuth) refusal.
 - Workspace invitations and onboarding API.
 - BotID removed; agreement metadata audit trail; copy-signing-link fallback.
-- Unit tests: 630/630 pass. Database tests for the new modules pass
+- Unit tests: 630/630 pass. Full database suite: 461/461 pass. New-module database tests
   (provisioning 5, setup 14, invitations 8, agreements 12, manual link 3).
 
 Not merged yet, saved as patches against this branch's history:
