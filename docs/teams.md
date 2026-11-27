@@ -13,7 +13,7 @@ An administrator makes teams in **Settings**, under **Teams**, and adds people w
 
 People on a team see the envelopes sent by the others on any of their teams. The dashboard has **Mine** and **My team**, and an administrator also has **Everyone's**. **My team** lists your own envelopes and your teammates' sent ones, a page at a time like the other views, and its search box also finds a teammate by name or email. A teammate's envelope says who sent it.
 
-Making, renaming and deleting a team, and adding and removing people, are recorded in the install's audit trail (Settings, Organization, "Site audit trail") as "Team made", "Team changed", "Team deleted", "Added to a team" and "Removed from a team". Deleting a team leaves everyone's envelopes as they are; its members just stop seeing each other's.
+Making, renaming and deleting a team, and adding and removing people, are recorded in the install's audit trail (Settings, Security, "Site audit trail") as "Team made", "Team changed", "Team deleted", "Added to a team" and "Removed from a team". Deleting a team leaves everyone's envelopes as they are; its members just stop seeing each other's.
 
 ## Who can do what
 

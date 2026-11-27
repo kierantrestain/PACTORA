@@ -198,7 +198,7 @@ Each free plan has its own monthly allowance, and the smallest one sets the limi
 
 Daily backups are off unless you turn them on. On Vercel Hobby a backup store in the same account shares the same free Blob storage. It holds about as much as the install's own files, plus copies of the database, so turning backups on leaves room for fewer than half as many finished documents.
 
-None of these plans bills you for going over. It stops instead: files cannot be read, email is not sent, or the database pauses. The monthly allowances come back when the month turns over. The two 1 GB limits do not, because stored files and database rows stay until they are deleted: make room by deleting old documents, or by setting how long finished documents are kept under Settings, Organization. Better still, move up before you reach a limit, not after.
+None of these plans bills you for going over. It stops instead: files cannot be read, email is not sent, or the database pauses. The monthly allowances come back when the month turns over. The two 1 GB limits do not, because stored files and database rows stay until they are deleted: make room by deleting old documents, or by setting how long finished documents are kept under Settings. Better still, move up before you reach a limit, not after.
 
 ### Past the free plans
 
@@ -217,7 +217,7 @@ DocuSign's figures are its US list prices for annual plans in November 2026: $30
 2. **Add the three things Vercel offers to create**, each on a free plan: [Resend](https://resend.com) for email, a [Neon](https://neon.com) Postgres database, and a private [Vercel Blob](https://vercel.com/docs/vercel-blob) store.
 3. **Click Deploy.** The build creates the database tables by itself. If Vercel stops with "One or more integration resources failed to provision", nothing is wrong with your copy: Resend was still checking its domain. Wait a minute or two, refresh the page, and click **Redeploy**. See [If the first deployment fails](docs/self-hosting.md#if-the-first-deployment-fails).
 4. **Open your new site.** Name your organization, give the email address people should write to for help, and create the first account, which is the administrator.
-5. **Set up the address you send from.** Under Settings, Organization, enter an address at your own domain. The site lists the DNS records to add and checks them for you.
+5. **Set up the address you send from.** Under Settings, Advanced Administration, enter an address at your own domain. The site lists the DNS records to add and checks them for you.
 
 **Taking new versions.** Settings, PACTORA, **Check for updates** tells you when a new release is out and what is in it. A workflow that comes with your copy then opens a pull request with the release in your GitHub repository; merge it and Vercel deploys the update. See [Keep your install up to date](docs/self-hosting.md#keep-your-install-up-to-date).
 

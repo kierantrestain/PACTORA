@@ -1,4 +1,9 @@
 import {
+  eraseDeliveriesFor,
+  exportDeliveriesFor,
+  type DeliveryExportRecord,
+} from "./email/deliveries.ts";
+import {
   type DbExecutor,
   type DbPool,
   getDb,
@@ -413,6 +418,8 @@ async function deleteSignerWebhookDeliveries(
 export type SignerDataExport = {
   auditEvents: Record<string, unknown>[];
   email: string;
+  /** The delivery log's records of mail sent to this address (no message bodies). */
+  emailDeliveries: DeliveryExportRecord[];
   envelopes: SignerEnvelopeRow[];
   exportedAt: string;
   fields: Record<string, unknown>[];
@@ -429,7 +436,7 @@ export async function exportSignerData(
   const envelopes = await listSignerEnvelopes(email, database);
   const signerIds = envelopes.map((row) => row.signerId);
   const envelopeIds = envelopes.map((row) => row.envelopeId);
-  const [fields, auditEvents, webhookDeliveries] = await Promise.all([
+  const [fields, auditEvents, webhookDeliveries, emailDeliveries] = await Promise.all([
     queryMany<Record<string, unknown>>(
       database,
       `
@@ -468,11 +475,19 @@ export async function exportSignerData(
       [envelopeIds, email, signerIds],
     ),
     listSignerWebhookDeliveries(email, envelopeIds, database),
+    exportDeliveriesFor({ email }, database).catch((error: unknown) => {
+      if (isMissingSchemaError(error)) {
+        return [];
+      }
+
+      throw error;
+    }),
   ]);
 
   return {
     auditEvents,
     email,
+    emailDeliveries,
     envelopes,
     exportedAt: new Date().toISOString(),
     fields,
@@ -483,6 +498,8 @@ export async function exportSignerData(
 
 export type SignerErasureResult = {
   deletedEnvelopes: number;
+  /** Delivery log records whose address and subject were erased. */
+  erasedEmailDeliveries?: number;
   /** Stored webhook deliveries deleted for this signer, when any were removed. */
   deletedWebhookDeliveries?: number;
   /** Part 11 records, which an erasure request does not delete. */
@@ -616,9 +633,28 @@ export async function eraseSignerData(
     );
   }
 
+  // The delivery log names the address too. Records about envelopes that
+  // are kept (in progress, or Part 11) keep it with them; every other
+  // record keeps only that a message was sent.
+  const erasedEmailDeliveries = await eraseDeliveriesFor(email, {
+    database,
+    keepEnvelopeIds: [
+      ...keptPart11.map((row) => row.envelopeId),
+      ...inProgress.map((row) => row.envelopeId),
+      ...raced.map((row) => row.envelopeId),
+    ],
+  }).catch((error: unknown) => {
+    if (isMissingSchemaError(error)) {
+      return 0;
+    }
+
+    throw error;
+  });
+
   return {
     deletedEnvelopes,
     ...(deletedWebhookDeliveries > 0 ? { deletedWebhookDeliveries } : {}),
+    ...(erasedEmailDeliveries > 0 ? { erasedEmailDeliveries } : {}),
     keptPart11: keptPart11.map((row) => ({
       id: row.envelopeId,
       title: row.envelopeTitle,

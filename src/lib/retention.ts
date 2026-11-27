@@ -674,6 +674,34 @@ async function deleteAccountRows(
     database,
   );
 
+  // The delivery log: what was sent on this account's behalf no longer
+  // points at it, and the account's own address is erased from it. Mail
+  // about envelopes handed over to the organization keeps its recipients.
+  await database.query(
+    `
+      UPDATE email_deliveries
+      SET sender_user_id = NULL,
+          encrypted_payload = NULL,
+          status = CASE WHEN status IN ('retrying', 'deferred', 'sending') THEN 'superseded' ELSE status END,
+          next_attempt_at = NULL,
+          updated_at = $2
+      WHERE sender_user_id = $1
+    `,
+    [userId, now],
+  );
+
+  if (closed?.email) {
+    await database.query(
+      `
+        UPDATE email_deliveries
+        SET to_address = 'erased', subject = 'erased', last_error = NULL,
+            recovery = NULL, provider_message_id = NULL, updated_at = $2
+        WHERE lower(to_address) = lower($1)
+      `,
+      [closed.email, now],
+    );
+  }
+
   await database.query(
     `
       DELETE FROM "user"

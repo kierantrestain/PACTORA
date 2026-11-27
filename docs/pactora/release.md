@@ -1,4 +1,9 @@
-# Release 1.0.0-rc.1
+# Release 1.1 (and 1.0.0-rc.1)
+
+PACTORA 1.1 adds token-free sign-up, the universal email engine and the
+sectioned Settings; see `RELEASE_REPORT.md` in this folder.
+
+## 1.0.0-rc.1
 
 ## What is in this release
 
@@ -39,10 +44,14 @@ On Vercel:
 2. Storage: create a **private** Blob store and connect it to the project.
 3. Storage: create a Neon Postgres database and connect it to the project.
    The build runs the migrations (`vercel.json` build command).
-4. Integrations: add Resend and connect it, so signing emails are
-   delivered. Until then, the dashboard shows an email setup warning and
-   envelopes cannot reach signers.
-5. Redeploy, open the site, and complete `/setup` as the first visitor.
-   Set `SETUP_TOKEN` first if the URL could be found by someone else.
+4. Email (optional, no paid service needed): after the owner exists,
+   connect a mailbox in Settings, Email & Integrations, or set
+   `PLATFORM_SMTP_URL`. Without one, senders copy signing links instead.
+5. The first owner. If the deployment is protected (Vercel Authentication on
+   every URL that reaches it), set `PACTORA_ACCESS_PROTECTED=1` and sign up at
+   `/signup`. Otherwise do not: provision the owner with
+   `DATABASE_URL=… npm run owner:provision -- --email … --name …`, or with
+   `OWNER_PROVISIONING_TOKEN` through `POST /api/setup`. Token-free
+   registration on an unprotected public URL is refused by design.
 
 Self-hosted: see `docs/self-hosting.md`.

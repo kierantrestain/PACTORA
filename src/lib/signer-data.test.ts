@@ -482,6 +482,11 @@ function createFakePool(state: FakeDbState): pg.Pool {
       return { rowCount: beforeCount - state.envelopes.length, rows: [] };
     }
 
+    // The email delivery log (1.1): empty for these signers.
+    if (normalized.includes("email_deliveries")) {
+      return { rowCount: 0, rows: [] };
+    }
+
     throw new Error(`Unexpected query in fake DB: ${normalized}`);
   };
 

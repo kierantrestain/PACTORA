@@ -200,7 +200,10 @@ export function LoginShell({
 
       setBanner(
         response.ok
-          ? { text: "Confirmation email sent. Check your inbox.", tone: "success" }
+          ? {
+              text: "Confirmation email sent. Check your inbox.",
+              tone: "success",
+            }
           : {
               text: "We couldn't send the confirmation email.",
               tone: "danger",
@@ -240,7 +243,9 @@ export function LoginShell({
       }
       title="Sign in"
     >
-      {banner ? <AuthNotice tone={banner.tone}>{banner.text}</AuthNotice> : null}
+      {banner ? (
+        <AuthNotice tone={banner.tone}>{banner.text}</AuthNotice>
+      ) : null}
 
       {sso ? (
         <SsoButton

@@ -36,8 +36,8 @@ export default async function PrivacyPage() {
         <p>
           PACTORA is not intended for legally required consumer disclosure
           workflows that need a separate E-SIGN consumer-consent process. If a
-          sender uses PACTORA outside that scope, the sender remains
-          responsible for making sure the workflow is legally appropriate.
+          sender uses PACTORA outside that scope, the sender remains responsible
+          for making sure the workflow is legally appropriate.
         </p>
       </section>
 

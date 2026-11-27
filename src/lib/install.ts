@@ -27,7 +27,12 @@ export async function getInstallMetadata(): Promise<Metadata> {
 
   return {
     description: `Send and sign documents with ${branding.productName}.`,
-    title: branding.productName,
+    // A page with a title of its own ("Create account") keeps the
+    // organization's name after it.
+    title: {
+      default: branding.productName,
+      template: `%s · ${branding.productName}`,
+    },
   };
 }
 

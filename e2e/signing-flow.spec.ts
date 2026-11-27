@@ -78,7 +78,7 @@ test("a new install is set up, a sender sends a PDF and a recipient signs it", a
 
   watchForContentSecurityPolicyViolations(page, cspViolations);
 
-  await test.step("the first visitor sets the site up", async () => {
+  await test.step("the first visitor creates the workspace with a name, an email and a password", async () => {
     const adminContext = await browser.newContext({
       viewport: { height: 900, width: 1440 },
     });
@@ -86,13 +86,8 @@ test("a new install is set up, a sender sends a PDF and a recipient signs it", a
 
     watchForContentSecurityPolicyViolations(adminPage, cspViolations);
 
-    // Until someone has set it up, every front door leads to the setup page
-    // and nobody can create an ordinary account.
-    for (const frontDoor of ["/", "/login", "/signup"]) {
-      await adminPage.goto(frontDoor);
-      await expect(adminPage).toHaveURL(/\/setup$/);
-    }
-
+    // Before anyone owns the install, ordinary sign-up is closed: the
+    // first account is created through owner registration, once.
     const earlySignup = await adminContext.request.post(
       "/api/auth/sign-up/email",
       {
@@ -101,45 +96,69 @@ test("a new install is set up, a sender sends a PDF and a recipient signs it", a
           name: "Olive Outsider",
           password: PASSWORD,
         },
-        headers: { origin: new URL(adminPage.url()).origin },
+        headers: { origin: baseURL! },
       },
     );
 
     expect(earlySignup.status()).toBe(403);
     expect(await earlySignup.json()).toMatchObject({ code: "setup_required" });
 
+    await adminPage.goto("/signup");
+    await expect(
+      adminPage.getByRole("heading", { name: "Create your workspace" }),
+    ).toBeVisible();
+    // Nothing technical is asked for: no token, no support or sender address.
+    await expect(adminPage.getByLabel("Setup token")).toHaveCount(0);
+    await expect(adminPage.getByLabel("Support email")).toHaveCount(0);
+
+    // The password can be shown to check it, and hidden again.
+    const passwordBox = adminPage.getByLabel("Password", { exact: true });
+
+    await expect(passwordBox).toHaveAttribute("type", "password");
+    await expect(async () => {
+      if ((await passwordBox.getAttribute("type")) !== "text") {
+        await adminPage.getByRole("button", { name: /show password/i }).click();
+      }
+
+      await expect(passwordBox).toHaveAttribute("type", "text", {
+        timeout: 1_000,
+      });
+    }).toPass();
+
+    await passwordBox.fill(PASSWORD);
+    await adminPage.getByLabel("Full name").fill("Ada Admin");
+    await adminPage.getByLabel("Email address").fill(adminEmail);
+    await adminPage.getByRole("button", { name: "Create account" }).click();
+
+    // Straight into the workspace, with an optional checklist.
+    await expect(adminPage).toHaveURL(/\/dashboard$/);
+    await expect(
+      adminPage.getByRole("heading", { name: "Getting started" }),
+    ).toBeVisible();
+
+    // Only one person can ever claim the install this way.
+    const secondOwner = await browser.newContext();
+    const secondClaim = await secondOwner.request.post("/api/register", {
+      data: {
+        email: outsiderEmail,
+        name: "Olive Outsider",
+        password: PASSWORD,
+      },
+      headers: { origin: baseURL! },
+    });
+
+    expect(secondClaim.status()).toBe(409);
+    expect(await secondClaim.json()).toMatchObject({ code: "owner_exists" });
+    await secondOwner.close();
+
+    // The workspace is named and given a support address in Settings.
+    await adminPage.goto("/settings/workspace");
+    await adminPage.waitForLoadState("networkidle");
     await adminPage.getByLabel("Organization name").fill(ORGANIZATION_NAME);
-    await adminPage.getByLabel("Your name").fill("Ada Admin");
-    await adminPage.getByLabel("Your email").fill(adminEmail);
-    await adminPage.getByLabel("Password").fill(PASSWORD);
-
-    // Setup does not finish without an address people can write to for
-    // help. Nothing stands in for it, the administrator's own included.
-    await adminPage.getByLabel("Setup token").fill(e2eSetupToken);
-    await adminPage.getByRole("button", { name: "Finish setup" }).click();
-    await expect(
-      adminPage.getByText(
-        "Enter an email address people can write to for help",
-      ),
-    ).toBeVisible();
-    await expect(adminPage).toHaveURL(/\/setup$/);
-    await adminPage.getByLabel("Support email").fill(supportEmail);
-
-    // The deployment sets SETUP_TOKEN, so knowing the URL is not enough.
-    await adminPage.getByLabel("Setup token").fill("not the token");
-    await adminPage.getByRole("button", { name: "Finish setup" }).click();
-    await expect(
-      adminPage.getByText("This is not the setup token for this site"),
-    ).toBeVisible();
-
-    await adminPage.getByLabel("Setup token").fill(e2eSetupToken);
-    await adminPage.getByRole("button", { name: "Finish setup" }).click();
-
-    // Setup ends signed in, on the administrator's settings.
-    await expect(adminPage).toHaveURL(/\/settings#organization$/);
-    await expect(
-      adminPage.getByRole("link", { exact: true, name: ORGANIZATION_NAME }),
-    ).toBeVisible();
+    await adminPage.getByLabel("Support address").fill(supportEmail);
+    await adminPage.getByRole("button", { name: "Save changes" }).click();
+    await expect(adminPage.getByText("Changes saved.")).toBeVisible();
+    await adminPage.reload();
     await expect(adminPage.getByLabel("Organization name")).toHaveValue(
       ORGANIZATION_NAME,
     );
@@ -147,12 +166,9 @@ test("a new install is set up, a sender sends a PDF and a recipient signs it", a
       supportEmail,
     );
     // The starting sign-up rule is the administrator's own email domain.
-    await expect(adminPage.getByLabel("Email domains")).toHaveValue(
-      "example.com",
-    );
     await expect(
-      adminPage.getByText("Emails are being captured, not sent"),
-    ).toBeVisible();
+      adminPage.getByRole("textbox", { name: "Email domains" }),
+    ).toHaveValue("example.com");
 
     const testEmailResponse = await adminContext.request.post(
       "/api/admin/email",
@@ -167,12 +183,14 @@ test("a new install is set up, a sender sends a PDF and a recipient signs it", a
     });
 
     expect(testEmail.subject).toBe(`Test email from ${ORGANIZATION_NAME}`);
-    // Replies and questions go to the address given at setup.
+    // Replies and questions go to the support address.
     expect(testEmail.replyTo).toBe(supportEmail);
     expect(testEmail.text).toContain(`Questions? Contact ${supportEmail}.`);
 
     // The organization puts its own logo and color on the site. The logo
     // is saved the moment it is chosen, the color with the form.
+    await adminPage.goto("/settings/branding");
+    await adminPage.waitForLoadState("networkidle");
     await adminPage.getByLabel("Logo image").setInputFiles({
       buffer: LOGO_PNG,
       mimeType: "image/png",
@@ -182,46 +200,36 @@ test("a new install is set up, a sender sends a PDF and a recipient signs it", a
       adminPage.getByRole("button", { name: "Replace logo" }),
     ).toBeVisible();
     await adminPage.getByLabel("Brand color").fill(BRAND_COLOR);
-    await adminPage
-      .getByRole("button", { name: "Save organization settings" })
-      .click();
-    await expect(
-      adminPage.getByText("Organization settings saved."),
-    ).toBeVisible();
+    await adminPage.getByRole("button", { name: "Save changes" }).click();
+    await expect(adminPage.getByText("Changes saved.")).toBeVisible();
     await expect.poll(() => readAccentColor(adminPage)).toBe(BRAND_COLOR);
 
     // Words of the administrator's own in place of the standard disclosure
     // are saved only after they agree to the notice about E-SIGN. Cancel
     // saves nothing, and going back to the standard text needs no notice.
+    await adminPage.goto("/settings/documents");
+    await adminPage.waitForLoadState("networkidle");
+
     const disclosureBox = adminPage.getByLabel("Disclosure text");
-    const saveOrganization = adminPage.getByRole("button", {
-      name: "Save organization settings",
+    const saveDocuments = adminPage.getByRole("button", {
+      name: "Save changes",
     });
     const notice = adminPage.getByRole("dialog", {
       name: "Before you change what signers agree to",
     });
 
-    await expect(
-      adminPage.getByText(
-        "We're not lawyers, and nothing here is legal advice",
-      ),
-    ).toBeVisible();
     await disclosureBox.fill("## Signing online\nWe send this online.");
-    await saveOrganization.click();
+    await saveDocuments.click();
     await expect(notice).toBeVisible();
     await expect(notice).toContainText("U.S. E-SIGN Act");
     await expect(notice).toContainText("Nothing in PACTORA");
     await notice.getByRole("button", { name: "Cancel" }).click();
     await expect(notice).toBeHidden();
-    await expect(
-      adminPage.getByText("Organization settings saved."),
-    ).toBeHidden();
+    await expect(adminPage.getByText("Changes saved.")).toBeHidden();
 
-    await saveOrganization.click();
+    await saveDocuments.click();
     await notice.getByRole("button", { name: "I agree" }).click();
-    await expect(
-      adminPage.getByText("Organization settings saved."),
-    ).toBeVisible();
+    await expect(adminPage.getByText("Changes saved.")).toBeVisible();
 
     await adminPage.reload();
     await expect(disclosureBox).toHaveValue(
@@ -231,18 +239,13 @@ test("a new install is set up, a sender sends a PDF and a recipient signs it", a
     await adminPage
       .getByRole("button", { name: "Use the standard text" })
       .click();
-    await saveOrganization.click();
+    await saveDocuments.click();
     await expect(notice).toBeHidden();
-    await expect(
-      adminPage.getByText("Organization settings saved."),
-    ).toBeVisible();
+    await expect(adminPage.getByText("Changes saved.")).toBeVisible();
     await adminPage.reload();
     await expect(disclosureBox).toHaveValue("");
 
-    // Setup can only happen once.
-    await adminPage.goto("/setup");
-    await expect(adminPage).not.toHaveURL(/\/setup/);
-
+    // The old setup page is gone; the setup API refuses a second claim.
     const secondSetup = await adminContext.request.post("/api/setup", {
       data: {
         email: outsiderEmail,
@@ -310,11 +313,11 @@ test("a new install is set up, a sender sends a PDF and a recipient signs it", a
 
   await test.step("an address outside the organization cannot sign up", async () => {
     await page.goto("/signup");
-    await expect(page).toHaveTitle(ORGANIZATION_NAME);
+    await expect(page).toHaveTitle(`Create account · ${ORGANIZATION_NAME}`);
     await page.getByLabel("Full name").fill("Olive Outsider");
-    await page.getByLabel("Email").fill(outsiderEmail);
-    await page.getByLabel("Password").fill(PASSWORD);
-    await page.getByRole("button", { name: "Sign up" }).click();
+    await page.getByLabel("Email address").fill(outsiderEmail);
+    await page.getByLabel("Password", { exact: true }).fill(PASSWORD);
+    await page.getByRole("button", { name: "Create account" }).click();
     await expect(
       page.getByRole("alert").filter({
         hasText:
@@ -326,11 +329,11 @@ test("a new install is set up, a sender sends a PDF and a recipient signs it", a
   await test.step("sign up and verify the email address", async () => {
     await page.goto("/signup");
     await page.getByLabel("Full name").fill("Sam Sender");
-    await page.getByLabel("Email").fill(senderEmail);
-    await page.getByLabel("Password").fill(PASSWORD);
-    await page.getByRole("button", { name: "Sign up" }).click();
+    await page.getByLabel("Email address").fill(senderEmail);
+    await page.getByLabel("Password", { exact: true }).fill(PASSWORD);
+    await page.getByRole("button", { name: "Create account" }).click();
     await expect(
-      page.getByText("Check your email to verify your sender account."),
+      page.getByRole("heading", { name: "Check your inbox" }),
     ).toBeVisible();
 
     const verificationEmail = await waitForEmail({
@@ -346,13 +349,29 @@ test("a new install is set up, a sender sends a PDF and a recipient signs it", a
     await page.goto(
       extractLink(verificationEmail.text, "/api/auth/verify-email"),
     );
+    await expect(page).toHaveURL(/\/verify-email/);
+    await expect(
+      page.getByRole("heading", { name: "You're all set" }),
+    ).toBeVisible();
+    // Confirming signs them in, or offers sign-in when it does not.
+    await page
+      .getByRole("link", { name: /Go to your documents|Sign in/ })
+      .first()
+      .click();
+
+    if (/\/dashboard$/.test(page.url())) {
+      await page.getByRole("button", { name: /Account menu/ }).click();
+      await page.getByRole("menuitem", { name: /Sign out/ }).click();
+      await page.goto("/login");
+    }
+
     await expect(page).toHaveURL(/\/login/);
   });
 
   await test.step("log in", async () => {
-    await page.getByLabel("Email").fill(senderEmail);
-    await page.getByLabel("Password").fill(PASSWORD);
-    await page.getByRole("button", { name: "Log in" }).click();
+    await page.getByLabel("Email address").fill(senderEmail);
+    await page.getByLabel("Password", { exact: true }).fill(PASSWORD);
+    await page.getByRole("button", { name: "Sign in" }).click();
     await expect(page).toHaveURL(/\/dashboard$/);
     await expect(
       page.getByRole("heading", { name: "No documents yet" }),
@@ -360,9 +379,10 @@ test("a new install is set up, a sender sends a PDF and a recipient signs it", a
 
     // An ordinary account gets none of the administrator's controls.
     await page.goto("/settings");
-    await expect(
-      page.getByRole("heading", { name: "Organization" }),
-    ).toHaveCount(0);
+    await expect(page).toHaveURL(/\/settings\/profile$/);
+    await expect(page.getByRole("link", { name: "Workspace" })).toHaveCount(0);
+    await page.goto("/settings/workspace");
+    await expect(page).toHaveURL(/\/settings\/profile$/);
     expect((await page.request.get("/api/admin/email")).status()).toBe(403);
     expect(
       (
@@ -400,7 +420,7 @@ test("a new install is set up, a sender sends a PDF and a recipient signs it", a
 
     await stalePage.goto("/login");
     await expect(
-      stalePage.getByRole("button", { name: "Log in" }),
+      stalePage.getByRole("button", { name: "Sign in" }),
     ).toBeVisible();
     await staleContext.close();
   });
@@ -831,28 +851,22 @@ test("a new install is set up, a sender sends a PDF and a recipient signs it", a
     ).toBe(401);
     await anonymousContext.close();
 
-    // Someone signed in to the wrong account is offered a way to switch.
-    // The login page sends signed-in visitors to the dashboard, so the
-    // link has to end the session before going there.
+    // The old setup page is retired: it leads to the sign-up page, which
+    // sends a signed-in visitor on to their documents. Taking charge of an
+    // install like this one is for its operator, through the provisioning
+    // API below (or npm run owner:provision).
     const wrongAccountContext = await browser.newContext();
     const wrongAccountPage = await wrongAccountContext.newPage();
 
     await wrongAccountPage.goto("/login");
-    await wrongAccountPage.getByLabel("Email").fill(senderEmail);
-    await wrongAccountPage.getByLabel("Password").fill(PASSWORD);
-    await wrongAccountPage.getByRole("button", { name: "Log in" }).click();
+    await wrongAccountPage.getByLabel("Email address").fill(senderEmail);
+    await wrongAccountPage
+      .getByLabel("Password", { exact: true })
+      .fill(PASSWORD);
+    await wrongAccountPage.getByRole("button", { name: "Sign in" }).click();
     await expect(wrongAccountPage).toHaveURL(/\/dashboard$/);
     await wrongAccountPage.goto("/setup");
-    // The settings went with the administrator, the support address among
-    // them, so whoever takes charge is asked for one.
-    await expect(wrongAccountPage.getByLabel("Support email")).toBeVisible();
-    await wrongAccountPage
-      .getByRole("button", { name: "Log in as someone else" })
-      .click();
-    await expect(wrongAccountPage).toHaveURL(/\/login$/);
-    await expect(
-      wrongAccountPage.getByRole("button", { name: "Log in" }),
-    ).toBeVisible();
+    await expect(wrongAccountPage).not.toHaveURL(/\/setup/);
     await wrongAccountContext.close();
 
     expect(
@@ -872,9 +886,9 @@ test("a new install is set up, a sender sends a PDF and a recipient signs it", a
 
     expect(claimed.status()).toBe(201);
 
-    await page.goto("/settings");
+    await page.goto("/settings/workspace");
     await expect(
-      page.getByRole("heading", { name: "Organization" }),
+      page.getByRole("heading", { level: 1, name: "Workspace" }),
     ).toBeVisible();
     await expect(page.getByLabel("Organization name")).toHaveValue(
       claim.organizationName,
@@ -917,17 +931,19 @@ test("in Part 11 mode a verified account signs, with its password and a stated m
 
   await test.step("the administrator turns Part 11 mode on", async () => {
     await page.goto("/login");
-    await page.getByLabel("Email").fill(adminEmail);
-    await page.getByLabel("Password").fill(PASSWORD);
-    await page.getByRole("button", { name: "Log in" }).click();
+    await page.getByLabel("Email address").fill(adminEmail);
+    await page.getByLabel("Password", { exact: true }).fill(PASSWORD);
+    await page.getByRole("button", { name: "Sign in" }).click();
     await expect(page).toHaveURL(/\/dashboard$/);
-    await page.goto("/settings");
+    await page.goto("/settings/security");
     await page.getByRole("button", { name: "Turn on Part 11 mode" }).click();
     await expect(
       page.getByRole("button", { name: "Turn off Part 11 mode" }),
     ).toBeVisible();
     // A retention period would delete regulated records on a timer.
+    await page.goto("/settings/data");
     await expect(page.getByLabel("Days to keep")).toBeDisabled();
+    await page.goto("/settings/workspace");
     // Part 11 signers need an account, so the sign-up rule covers them too.
     await expect(
       page.getByText("Part 11 mode is on, so this covers signers too."),
@@ -943,9 +959,9 @@ test("in Part 11 mode a verified account signs, with its password and a stated m
 
     await signerPage.goto("/signup");
     await signerPage.getByLabel("Full name").fill(signerName);
-    await signerPage.getByLabel("Email").fill(signerEmail);
-    await signerPage.getByLabel("Password").fill(PASSWORD);
-    await signerPage.getByRole("button", { name: "Sign up" }).click();
+    await signerPage.getByLabel("Email address").fill(signerEmail);
+    await signerPage.getByLabel("Password", { exact: true }).fill(PASSWORD);
+    await signerPage.getByRole("button", { name: "Create account" }).click();
 
     const verificationEmail = await waitForEmail({
       template: "email_verification",
@@ -955,7 +971,10 @@ test("in Part 11 mode a verified account signs, with its password and a stated m
     await signerPage.goto(
       extractLink(verificationEmail.text, "/api/auth/verify-email"),
     );
-    await expect(signerPage).toHaveURL(/\/login/);
+    await expect(signerPage).toHaveURL(/\/verify-email$/);
+    await expect(
+      signerPage.getByRole("heading", { name: "You're all set" }),
+    ).toBeVisible();
     await signerContext.close();
   });
 
@@ -1014,7 +1033,7 @@ test("in Part 11 mode a verified account signs, with its password and a stated m
       ),
     ).toBeVisible();
 
-    await page.goto("/settings");
+    await page.goto("/settings/team");
     await page
       .getByRole("button", { name: `Confirm ${signerName}'s identity` })
       .click();
@@ -1048,7 +1067,7 @@ test("in Part 11 mode a verified account signs, with its password and a stated m
       signerPage.getByRole("heading", { name: "Confirm it's you" }),
     ).toBeVisible();
     await signerPage.getByLabel("Email address").fill(signerEmail);
-    await signerPage.getByLabel("Password").fill(PASSWORD);
+    await signerPage.getByLabel("Password", { exact: true }).fill(PASSWORD);
     await signerPage.getByRole("button", { name: "Continue" }).click();
 
     const consent = signerPage.getByRole("dialog", { name: "Before you sign" });
@@ -1079,11 +1098,13 @@ test("in Part 11 mode a verified account signs, with its password and a stated m
       .getByRole("checkbox", { name: "I confirm the meaning of my signature" })
       .check();
     await finish.getByLabel("Email address").fill(signerEmail);
-    await finish.getByLabel("Password").fill("not my password");
+    await finish
+      .getByLabel("Password", { exact: true })
+      .fill("not my password");
     await finishButton.click();
     await expect(finish.getByRole("alert")).toBeVisible();
 
-    await finish.getByLabel("Password").fill(PASSWORD);
+    await finish.getByLabel("Password", { exact: true }).fill(PASSWORD);
     await finishButton.click();
     await expect(signerPage).toHaveURL(/\/sign\/[^/]+\/done/);
     await signerContext.close();
@@ -1131,7 +1152,7 @@ test("in Part 11 mode a verified account signs, with its password and a stated m
       ).status(),
     ).toBe(200);
     // With the mode off, ordinary signers again need no account.
-    await page.goto("/settings");
+    await page.goto("/settings/workspace");
     await expect(
       page.getByText("People who are sent a document to sign don't need"),
     ).toBeVisible();
@@ -1169,9 +1190,9 @@ test("a signer signs with a qualified signature in their own name, through the s
     const pdfPath = await writeSamplePdf(testInfo.outputPath("supply.pdf"));
 
     await page.goto("/login");
-    await page.getByLabel("Email").fill(adminEmail);
-    await page.getByLabel("Password").fill(PASSWORD);
-    await page.getByRole("button", { name: "Log in" }).click();
+    await page.getByLabel("Email address").fill(adminEmail);
+    await page.getByLabel("Password", { exact: true }).fill(PASSWORD);
+    await page.getByRole("button", { name: "Sign in" }).click();
     await expect(page).toHaveURL(/\/dashboard$/);
 
     await page.goto("/envelopes/new");
@@ -1316,9 +1337,9 @@ test("a signer who declines is told the decline was recorded, not that the link 
     const pdfPath = await writeSamplePdf(testInfo.outputPath("terms.pdf"));
 
     await page.goto("/login");
-    await page.getByLabel("Email").fill(adminEmail);
-    await page.getByLabel("Password").fill(PASSWORD);
-    await page.getByRole("button", { name: "Log in" }).click();
+    await page.getByLabel("Email address").fill(adminEmail);
+    await page.getByLabel("Password", { exact: true }).fill(PASSWORD);
+    await page.getByRole("button", { name: "Sign in" }).click();
     await expect(page).toHaveURL(/\/dashboard$/);
 
     await page.goto("/envelopes/new");
@@ -1593,9 +1614,9 @@ test("a long Text answer keeps the signing page within the window", async ({
     const pdfPath = await writeSamplePdf(testInfo.outputPath("form.pdf"));
 
     await page.goto("/login");
-    await page.getByLabel("Email").fill(adminEmail);
-    await page.getByLabel("Password").fill(PASSWORD);
-    await page.getByRole("button", { name: "Log in" }).click();
+    await page.getByLabel("Email address").fill(adminEmail);
+    await page.getByLabel("Password", { exact: true }).fill(PASSWORD);
+    await page.getByRole("button", { name: "Sign in" }).click();
     await expect(page).toHaveURL(/\/dashboard$/);
 
     await page.goto("/envelopes/new");
@@ -1717,9 +1738,9 @@ test("with local disk storage a PDF just under 20 MB uploads, and a larger reque
   expect(adminEmail).not.toBe("");
 
   await page.goto("/login");
-  await page.getByLabel("Email").fill(adminEmail);
-  await page.getByLabel("Password").fill(PASSWORD);
-  await page.getByRole("button", { name: "Log in" }).click();
+  await page.getByLabel("Email address").fill(adminEmail);
+  await page.getByLabel("Password", { exact: true }).fill(PASSWORD);
+  await page.getByRole("button", { name: "Sign in" }).click();
   await expect(page).toHaveURL(/\/dashboard$/);
 
   await test.step("a 19 MB PDF, over Next.js's 10 MB default, makes a draft", async () => {
@@ -1788,11 +1809,11 @@ test("an administrator makes an API key and a webhook, an app sends and download
 
   await test.step("the key is made in Settings and shown once", async () => {
     await page.goto("/login");
-    await page.getByLabel("Email").fill(adminEmail);
-    await page.getByLabel("Password").fill(PASSWORD);
-    await page.getByRole("button", { name: "Log in" }).click();
+    await page.getByLabel("Email address").fill(adminEmail);
+    await page.getByLabel("Password", { exact: true }).fill(PASSWORD);
+    await page.getByRole("button", { name: "Sign in" }).click();
     await expect(page).toHaveURL(/\/dashboard$/);
-    await page.goto("/settings");
+    await page.goto("/settings/advanced");
     await page.getByPlaceholder("For example: Billing app").fill("Billing app");
     await page.getByRole("button", { name: "Create key" }).click();
 
@@ -2124,11 +2145,11 @@ test("an app shows the signing page in its own site, only on a site an administr
 
   await test.step("an administrator makes a key and allows the app's site", async () => {
     await page.goto("/login");
-    await page.getByLabel("Email").fill(adminEmail);
-    await page.getByLabel("Password").fill(PASSWORD);
-    await page.getByRole("button", { name: "Log in" }).click();
+    await page.getByLabel("Email address").fill(adminEmail);
+    await page.getByLabel("Password", { exact: true }).fill(PASSWORD);
+    await page.getByRole("button", { name: "Sign in" }).click();
     await expect(page).toHaveURL(/\/dashboard$/);
-    await page.goto("/settings");
+    await page.goto("/settings/advanced");
     await page.getByPlaceholder("For example: Billing app").fill("Portal");
     await page.getByRole("button", { name: "Create key" }).click();
     key =
@@ -2394,11 +2415,11 @@ test("two-step sign-in: an administrator sets it up and requires it of everyone"
 
   await test.step("requiring it is refused until the administrator uses it", async () => {
     await page.goto("/login");
-    await page.getByLabel("Email").fill(adminEmail);
-    await page.getByLabel("Password").fill(PASSWORD);
-    await page.getByRole("button", { name: "Log in" }).click();
+    await page.getByLabel("Email address").fill(adminEmail);
+    await page.getByLabel("Password", { exact: true }).fill(PASSWORD);
+    await page.getByRole("button", { name: "Sign in" }).click();
     await expect(page).toHaveURL(/\/dashboard$/);
-    await page.goto("/settings");
+    await page.goto("/settings/security");
     await page
       .getByRole("button", { name: "Require two-step sign-in" })
       .click();
@@ -2451,9 +2472,9 @@ test("two-step sign-in: an administrator sets it up and requires it of everyone"
     const adminPage = await context.newPage();
 
     await adminPage.goto("/login");
-    await adminPage.getByLabel("Email").fill(adminEmail);
-    await adminPage.getByLabel("Password").fill(PASSWORD);
-    await adminPage.getByRole("button", { name: "Log in" }).click();
+    await adminPage.getByLabel("Email address").fill(adminEmail);
+    await adminPage.getByLabel("Password", { exact: true }).fill(PASSWORD);
+    await adminPage.getByRole("button", { name: "Sign in" }).click();
     await expect(
       adminPage.getByRole("heading", { name: "Enter your code" }),
     ).toBeVisible();
@@ -2475,9 +2496,9 @@ test("two-step sign-in: an administrator sets it up and requires it of everyone"
     const memberPage = await context.newPage();
 
     await memberPage.goto("/login");
-    await memberPage.getByLabel("Email").fill(memberEmail);
-    await memberPage.getByLabel("Password").fill(PASSWORD);
-    await memberPage.getByRole("button", { name: "Log in" }).click();
+    await memberPage.getByLabel("Email address").fill(memberEmail);
+    await memberPage.getByLabel("Password", { exact: true }).fill(PASSWORD);
+    await memberPage.getByRole("button", { name: "Sign in" }).click();
     await expect(memberPage).toHaveURL(/\/two-step-setup$/);
     await expect(
       memberPage.getByRole("heading", { name: "Set up two-step sign-in" }),

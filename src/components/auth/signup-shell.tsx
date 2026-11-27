@@ -65,7 +65,8 @@ export function SignupShell({
           description="New accounts are by invitation. Ask your workspace administrator to invite you, then open the link in your email."
           footer={
             <p>
-              Already have an account? <AuthLink href="/login">Sign in</AuthLink>
+              Already have an account?{" "}
+              <AuthLink href="/login">Sign in</AuthLink>
             </p>
           }
           title="This workspace is invitation-only"
@@ -82,14 +83,15 @@ export function SignupShell({
           description="This deployment's owner account is created by the person who operates it, not from this page."
           footer={
             <p>
-              Already have an account? <AuthLink href="/login">Sign in</AuthLink>
+              Already have an account?{" "}
+              <AuthLink href="/login">Sign in</AuthLink>
             </p>
           }
           title="Owner account not set up yet"
         >
           <p className="text-sm leading-6 text-(--secondary)">
-            If you run this deployment, provision the owner account as
-            described in the self-hosting guide, then sign in here.
+            If you run this deployment, provision the owner account as described
+            in the self-hosting guide, then sign in here.
           </p>
         </AuthCard>
       );
@@ -241,7 +243,12 @@ function SignupForm({
 
     if (passwordProblem) {
       setErrors({ password: passwordProblem });
-    } else if (payload?.fieldErrors) {
+    } else if (
+      payload?.fieldErrors &&
+      (payload.fieldErrors.email ||
+        payload.fieldErrors.name ||
+        payload.fieldErrors.password)
+    ) {
       setErrors({
         email: payload.fieldErrors.email,
         name: payload.fieldErrors.name,
@@ -321,9 +328,7 @@ function SignupForm({
   }
 
   if (blocked === "provisioning") {
-    return (
-      <SignupShell registration={{ view: "provisioning-required" }} />
-    );
+    return <SignupShell registration={{ view: "provisioning-required" }} />;
   }
 
   if (sentTo) {

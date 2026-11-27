@@ -1,0 +1,57 @@
+# A complete self-hosted PACTORA: the app, PostgreSQL, and persistent
+# private storage for documents. Nothing here calls home or needs a
+# subscription.
+#
+#   cp .env.selfhost.example .env.selfhost   # then fill in the secrets
+#   docker compose -f docker-compose.selfhost.yml --env-file .env.selfhost up -d --build
+#
+# Keep BETTER_AUTH_SECRET (and EMAIL_CREDENTIALS_KEY, if set) with your
+# backups: they decrypt the seal key and saved mailbox credentials.
+services:
+  db:
+    image: postgres:17
+    restart: unless-stopped
+    environment:
+      POSTGRES_USER: pactora
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:?Set POSTGRES_PASSWORD}
+      POSTGRES_DB: pactora
+    volumes:
+      - pactora-db:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U pactora -d pactora"]
+      interval: 2s
+      timeout: 3s
+      retries: 30
+
+  app:
+    build: .
+    restart: unless-stopped
+    depends_on:
+      db:
+        condition: service_healthy
+    ports:
+      - "${PACTORA_PORT:-8080}:3000"
+    environment:
+      DATABASE_URL: postgres://pactora:${POSTGRES_PASSWORD}@db:5432/pactora
+      APP_URL: ${APP_URL:?Set APP_URL to the address people open}
+      BETTER_AUTH_SECRET: ${BETTER_AUTH_SECRET:?Set BETTER_AUTH_SECRET}
+      # Outgoing email for sign-in and invitations. Mailboxes for agreements
+      # are connected in Settings, Email & Integrations.
+      PLATFORM_SMTP_URL: ${PLATFORM_SMTP_URL:-}
+      PLATFORM_EMAIL_FROM: ${PLATFORM_EMAIL_FROM:-}
+      # 1 when the site is only reachable behind your own access gate (VPN,
+      # SSO proxy): the first person to sign up becomes the owner. Otherwise
+      # create the owner with: docker compose exec app npm run owner:provision
+      PACTORA_ACCESS_PROTECTED: ${PACTORA_ACCESS_PROTECTED:-}
+      EMAIL_DRIVER: ${EMAIL_DRIVER:-}
+      # New passwords are checked against known breaches at
+      # api.pwnedpasswords.com. Set "off" only on a network without it.
+      PASSWORD_BREACH_CHECK: ${PASSWORD_BREACH_CHECK:-}
+      STORAGE_DRIVER: local
+      STORAGE_LOCAL_DIR: /data/storage
+    volumes:
+      - pactora-files:/data
+
+volumes:
+  pactora-db:
+  pactora-files:

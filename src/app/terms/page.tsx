@@ -29,14 +29,14 @@ export default async function TermsPage() {
         </h2>
         <p>
           By creating an account, uploading a document, sending an envelope, or
-          signing through PACTORA, you agree to these Terms. If you use
-          PACTORA on behalf of a company or other organization, you represent
-          that you are authorized to bind that organization to these Terms.
+          signing through PACTORA, you agree to these Terms. If you use PACTORA
+          on behalf of a company or other organization, you represent that you
+          are authorized to bind that organization to these Terms.
         </p>
         <p>
-          PACTORA provides software for preparing, sending, signing, and
-          storing electronic records. PACTORA is not a law firm, is not your
-          lawyer, does not give legal advice, and does not determine whether a
+          PACTORA provides software for preparing, sending, signing, and storing
+          electronic records. PACTORA is not a law firm, is not your lawyer,
+          does not give legal advice, and does not determine whether a
           particular document is legally suitable for electronic signing in any
           jurisdiction.
         </p>
@@ -274,9 +274,9 @@ export default async function TermsPage() {
         <p>
           To the maximum extent permitted by law, the aggregate liability of
           PACTORA for all claims arising out of or relating to the service or
-          these Terms will not exceed the greater of the amount you paid
-          PACTORA for the service during the 12 months before the event giving
-          rise to the claim or one hundred U.S. dollars (US$100).
+          these Terms will not exceed the greater of the amount you paid PACTORA
+          for the service during the 12 months before the event giving rise to
+          the claim or one hundred U.S. dollars (US$100).
         </p>
       </section>
 
@@ -302,8 +302,8 @@ export default async function TermsPage() {
           Except where applicable law requires otherwise, these Terms are
           governed by applicable U.S. federal law and the law of the state in
           which the PACTORA operator is organized, without regard to
-          conflict-of-law rules. You and PACTORA agree to the exclusive venue
-          of the state or federal courts serving that location for disputes that
+          conflict-of-law rules. You and PACTORA agree to the exclusive venue of
+          the state or federal courts serving that location for disputes that
           may be brought in court.
         </p>
         <p>

@@ -102,7 +102,7 @@ The schema lives in `db/migrations` as plain SQL files. `npm run db:migrate` app
 
 PACTORA sends transactional email through Resend.
 
-- The support address, where replies go, is asked for when the site is set up. It and the address email is sent from can be changed by the administrator under Settings, Organization. The sender address must be at a domain verified with Resend; the same page adds the domain to Resend, lists the DNS records and checks them. With a Resend API key that is only allowed to send, it points you at Resend's dashboard for that step instead.
+- The support address, where replies go, is asked for when the site is set up. It and the address email is sent from can be changed by the administrator under Settings, Workspace and Settings, Advanced Administration. The sender address must be at a domain verified with Resend; the same page adds the domain to Resend, lists the DNS records and checks them. With a Resend API key that is only allowed to send, it points you at Resend's dashboard for that step instead.
 - `RESEND_FROM_EMAIL` and `SUPPORT_EMAIL` are optional. When set they take the place of the addresses saved in Settings, which then cannot be changed there, and with `SUPPORT_EMAIL` set the setup page does not ask for a support address.
 - Until a sender address is set, mail goes out from `onboarding@resend.dev`, which Resend only delivers to the owner of the Resend account.
 - In hosted mode the support address is also the contact shown on the Terms, Privacy, and Accessibility pages.

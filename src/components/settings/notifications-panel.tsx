@@ -93,7 +93,7 @@ export function NotificationsPanel({ isAdmin }: { isAdmin: boolean }) {
           </thead>
           <tbody>
             {MESSAGES.map((message) => (
-              <tr className="border-t border-(--line)" key={message.name}>
+              <tr className="border-t border-(--border)" key={message.name}>
                 <td className="px-1 py-2.5 font-semibold text-(--fg)">
                   {message.name}
                 </td>

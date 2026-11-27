@@ -62,8 +62,7 @@ async function fetchInvitation(token: string): Promise<LoadState> {
       { cache: "no-store" },
     );
     const payload = (await response.json().catch(() => null)) as
-      | (Partial<Invitation> & { code?: string; status?: string })
-      | null;
+      (Partial<Invitation> & { code?: string; status?: string }) | null;
 
     if (!response.ok || !payload?.email) {
       return classifyFailure(response.status, payload?.code ?? payload?.status);
@@ -73,7 +72,10 @@ async function fetchInvitation(token: string): Promise<LoadState> {
       return classifyFailure(response.status, payload.status);
     }
 
-    if (typeof payload.expiresAt === "number" && payload.expiresAt < Date.now()) {
+    if (
+      typeof payload.expiresAt === "number" &&
+      payload.expiresAt < Date.now()
+    ) {
       return { state: "expired" };
     }
 
@@ -355,8 +357,8 @@ function ReadyInvitation({
       <AuthCard description={description} title={`Join ${workspace}`}>
         <p className="text-sm leading-6 text-(--secondary)">
           You&apos;re signed in as{" "}
-          <strong className="text-(--fg)">{signedInAs.email}</strong>. Sign
-          out to accept this invitation for {invitation.email}.
+          <strong className="text-(--fg)">{signedInAs.email}</strong>. Sign out
+          to accept this invitation for {invitation.email}.
         </p>
         <button
           className="inline-flex min-h-12 w-full items-center justify-center rounded-[0.875rem] border-[1.5px] border-(--border-strong) bg-(--paper) px-5 text-[0.9375rem] font-bold text-(--fg) transition hover:bg-(--surface) disabled:opacity-60"

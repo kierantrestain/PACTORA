@@ -5,7 +5,7 @@ import { getOAuthLoginProviders } from "@/lib/auth/oauth-providers";
 import { redirectIfSignedIn } from "@/lib/auth/server";
 import { readPasswordSignInPolicy, readSsoConfig } from "@/lib/auth/sso";
 import { getRegistrationView } from "@/lib/owner-provisioning";
-import { canSendEmail } from "@/lib/services/email";
+import { canSendPlatformEmail } from "@/lib/services/email";
 
 export const metadata: Metadata = { title: "Create account" };
 
@@ -17,7 +17,7 @@ export default async function SignupPage() {
 
   return (
     <SignupShell
-      emailConnected={canSendEmail()}
+      emailConnected={await canSendPlatformEmail()}
       oauthProviders={getOAuthLoginProviders()}
       passwordSignIn={readPasswordSignInPolicy().enabled}
       registration={registration}

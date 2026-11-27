@@ -268,7 +268,7 @@ export function InvitationsPanel() {
       {invitations && invitations.length > 0 ? (
         <ul
           aria-label="Pending invitations"
-          className="divide-y divide-(--line)"
+          className="divide-y divide-(--border)"
         >
           {invitations.map((invitation) => (
             <li

@@ -769,3 +769,42 @@ test("the organisation's saved wording replaces the subject and opening paragrap
   assert.match(received[0]!.raw, /https:\/\/sign\.test\/x/);
   await database.query(`delete from email_templates`);
 });
+
+test("a signer data export lists their delivery records, and a signer erasure erases them", async () => {
+  const { eraseSignerData, exportSignerData } =
+    await import("../signer-data.ts");
+
+  await connectSmtp(alice);
+  await deliver(
+    message(alice.id, { to: "dana@recipient.test" }),
+    undefined,
+    engineOptions(),
+  );
+
+  const exported = await exportSignerData("dana@recipient.test", database);
+
+  assert.equal(exported.emailDeliveries.length, 1);
+  assert.equal(
+    exported.emailDeliveries[0]!.subject,
+    "Please sign the services agreement",
+  );
+
+  const erased = await eraseSignerData(
+    "dana@recipient.test",
+    "dana@recipient.test",
+    database,
+  );
+
+  assert.equal(erased.erasedEmailDeliveries, 1);
+  assert.equal(
+    (await exportSignerData("dana@recipient.test", database)).emailDeliveries
+      .length,
+    0,
+  );
+
+  const row = await database.query(
+    `select to_address, subject from email_deliveries`,
+  );
+
+  assert.deepEqual(row.rows[0], { subject: "erased", to_address: "erased" });
+});

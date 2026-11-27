@@ -691,7 +691,7 @@ export function EmailIntegrationsPanel({
               />
             ))}
         </ul>
-        <details className="group rounded-2xl border border-(--line) p-4">
+        <details className="group rounded-2xl border border-(--border) p-4">
           <summary className="cursor-pointer text-sm font-bold text-(--fg)">
             Advanced: custom mail server or Resend
           </summary>
@@ -803,7 +803,7 @@ function ProviderTile({
         aria-describedby={
           provider.unavailableReason ? `${provider.id}-unavailable` : undefined
         }
-        className="flex h-full w-full flex-col items-start gap-1 rounded-2xl border border-(--line) bg-(--paper) p-4 text-left transition hover:border-(--accent) focus-visible:ring-2 focus-visible:ring-(--accent) focus-visible:outline-none disabled:cursor-not-allowed disabled:opacity-60"
+        className="flex h-full w-full flex-col items-start gap-1 rounded-2xl border border-(--border) bg-(--paper) p-4 text-left transition hover:border-(--accent) focus-visible:ring-2 focus-visible:ring-(--accent) focus-visible:outline-none disabled:cursor-not-allowed disabled:opacity-60"
         disabled={disabled}
         onClick={onChoose}
         type="button"
@@ -856,7 +856,7 @@ function ScopeChoice({
         ] as const
       ).map(([option, label, description]) => (
         <label
-          className="flex cursor-pointer gap-3 rounded-xl border border-(--line) p-3"
+          className="flex cursor-pointer gap-3 rounded-xl border border-(--border) p-3"
           key={option}
         >
           <input
@@ -1275,8 +1275,10 @@ function EditAccountDialog({
         ...(organization
           ? {
               isDefault: values.isDefault,
-              sharedWith:
-                values.sharedWith === "teams" ? "everyone" : values.sharedWith,
+              // Sharing with chosen teams is kept as it is unless changed.
+              ...(values.sharedWith !== account.sharedWith
+                ? { sharedWith: values.sharedWith }
+                : {}),
             }
           : {}),
       }),
@@ -1356,13 +1358,14 @@ function EditAccountDialog({
                         .value as AccountView["sharedWith"],
                     }))
                   }
-                  value={
-                    values.sharedWith === "teams"
-                      ? "everyone"
-                      : values.sharedWith
-                  }
+                  value={values.sharedWith}
                 >
                   <option value="everyone">Everyone in the workspace</option>
+                  {account.sharedWith === "teams" ? (
+                    <option value="teams">
+                      The teams it is shared with now
+                    </option>
+                  ) : null}
                   <option value="nobody">
                     Nobody: sign-in and invitation emails only
                   </option>
@@ -1538,7 +1541,7 @@ function DeliveryHistory({ onChanged }: { onChanged: () => Promise<void> }) {
             <tbody>
               {rows.map((delivery) => (
                 <tr
-                  className="border-t border-(--line) align-top"
+                  className="border-t border-(--border) align-top"
                   key={delivery.id}
                 >
                   <td className="max-w-[12rem] truncate px-1 py-2.5 font-semibold text-(--fg)">

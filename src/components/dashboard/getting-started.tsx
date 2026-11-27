@@ -139,7 +139,7 @@ export function GettingStarted({
           <li key={step.key}>
             <Link
               className={cn(
-                "flex h-full gap-3 rounded-2xl border border-(--line) p-3.5 transition hover:border-(--accent) focus-visible:ring-2 focus-visible:ring-(--accent) focus-visible:outline-none",
+                "flex h-full gap-3 rounded-2xl border border-(--border) p-3.5 transition hover:border-(--accent) focus-visible:ring-2 focus-visible:ring-(--accent) focus-visible:outline-none",
                 step.done ? "bg-(--accent-softer)" : "bg-(--paper)",
               )}
               href={step.href}

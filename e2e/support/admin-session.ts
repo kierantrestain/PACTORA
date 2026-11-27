@@ -48,9 +48,9 @@ export async function signInAsAdministrator(page: Page): Promise<string> {
   expect(adminEmail).not.toBe("");
 
   await page.goto("/login");
-  await page.getByLabel("Email").fill(adminEmail);
-  await page.getByLabel("Password").fill(E2E_PASSWORD);
-  await page.getByRole("button", { name: "Log in" }).click();
+  await page.getByLabel("Email address").fill(adminEmail);
+  await page.getByLabel("Password", { exact: true }).fill(E2E_PASSWORD);
+  await page.getByRole("button", { name: "Sign in" }).click();
   await expect(page).toHaveURL(/\/dashboard$/);
 
   return adminEmail;

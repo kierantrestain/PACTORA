@@ -105,7 +105,9 @@ export function ForgotPasswordShell() {
       title="Reset your password"
     >
       {failed ? (
-        <AuthNotice>We couldn&apos;t send the link. Please try again.</AuthNotice>
+        <AuthNotice>
+          We couldn&apos;t send the link. Please try again.
+        </AuthNotice>
       ) : null}
       <form className="space-y-5" noValidate onSubmit={handleSubmit}>
         <TextField
@@ -203,9 +205,7 @@ export function ResetPasswordShell({ token }: { token: string | null }) {
         description="Your password has been changed and you've been signed out everywhere else."
         title="Password updated"
       >
-        <AuthPrimaryLink href="/login">
-          Sign in
-        </AuthPrimaryLink>
+        <AuthPrimaryLink href="/login">Sign in</AuthPrimaryLink>
       </AuthCard>
     );
   }
@@ -309,7 +309,9 @@ export function VerifyEmailShell({
         </AuthNotice>
       ) : null}
       {state === "failed" ? (
-        <AuthNotice>We couldn&apos;t send a new link. Please try again.</AuthNotice>
+        <AuthNotice>
+          We couldn&apos;t send a new link. Please try again.
+        </AuthNotice>
       ) : null}
       <form className="space-y-5" noValidate onSubmit={resend}>
         <TextField

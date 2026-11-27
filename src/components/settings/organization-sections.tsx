@@ -97,7 +97,7 @@ export function WorkspaceSettings({ initialSettings }: SectionProps) {
               }
               ignorePasswordManagers
               label="Support address"
-              name="support-address"
+              name="support-address-input"
               onChange={(event) =>
                 setValue("supportAddress", event.target.value)
               }
@@ -112,7 +112,7 @@ export function WorkspaceSettings({ initialSettings }: SectionProps) {
       <SettingsCard
         description={
           values.part11Mode
-            ? "Part 11 mode is on, so this covers signers too: a Part 11 envelope only goes to someone with a confirmed account here."
+            ? "Part 11 mode is on, so this covers signers too. A Part 11 envelope only goes to someone with a confirmed account here."
             : "This is about people who send documents. People who are sent a document to sign don't need an account."
         }
         id="signup-rule"
