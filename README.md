@@ -1,26 +1,30 @@
-<p align="center">
-  <img src="docs/images/banner.png" alt="PACTORA: e-signatures you actually own. Open source and MIT licensed. Send, sign and seal documents from your own Vercel account, at $0 per seat. Shown: a signer drawing a signature on a consulting agreement, and both signers marked Signed.">
-</p>
+# PACTORA
 
 <p align="center">
   An e-signature app for your own organization, on your own Vercel account.<br>
-  Upload a PDF, place fields, send signing links, and keep the sealed, signed copy with its audit certificate.
+  Write an agreement or upload a PDF, send signing links, and keep the sealed, signed copy with its audit certificate.
 </p>
 
 <p align="center">
-  <a href="https://vercel.com/new/clone?repository-url=https%3A%2F%2Fgithub.com%2Fkierantrestain%2FPACTORA&project-name=signudoc&repository-name=signudoc&stores=%5B%7B%22type%22%3A%22integration%22%2C%22integrationSlug%22%3A%22resend%22%2C%22productSlug%22%3A%22resend-email%22%2C%22protocol%22%3A%22messaging%22%7D%2C%7B%22type%22%3A%22integration%22%2C%22integrationSlug%22%3A%22neon%22%2C%22productSlug%22%3A%22neon%22%2C%22protocol%22%3A%22storage%22%7D%2C%7B%22type%22%3A%22blob%22%2C%22access%22%3A%22private%22%7D%5D&demo-title=PACTORA&demo-description=Your%20own%20e-signature%20site.%20Upload%20a%20PDF%2C%20place%20fields%2C%20send%20signing%20links%2C%20and%20keep%20the%20signed%20copy%20with%20its%20audit%20certificate.&demo-url=https%3A%2F%2Fgithub.com%2Fkierantrestain%2FPACTORA&demo-image=https%3A%2F%2Fraw.githubusercontent.com%2Fkierantrestain%2FPACTORA%2Fmain%2Fdocs%2Fimages%2Fbanner.png"><img src="docs/images/deploy-to-vercel.svg" alt="Deploy to Vercel" height="32"></a><br>
+  <a href="https://vercel.com/new/clone?repository-url=https%3A%2F%2Fgithub.com%2Fkierantrestain%2FPACTORA&project-name=pactora&repository-name=pactora&stores=%5B%7B%22type%22%3A%22integration%22%2C%22integrationSlug%22%3A%22resend%22%2C%22productSlug%22%3A%22resend-email%22%2C%22protocol%22%3A%22messaging%22%7D%2C%7B%22type%22%3A%22integration%22%2C%22integrationSlug%22%3A%22neon%22%2C%22productSlug%22%3A%22neon%22%2C%22protocol%22%3A%22storage%22%7D%2C%7B%22type%22%3A%22blob%22%2C%22access%22%3A%22private%22%7D%5D&demo-title=PACTORA&demo-description=Your%20own%20e-signature%20site.%20Write%20or%20upload%20agreements%2C%20send%20signing%20links%2C%20and%20keep%20the%20sealed%20copy%20with%20its%20audit%20certificate.&demo-url=https%3A%2F%2Fgithub.com%2Fkierantrestain%2FPACTORA"><img src="docs/images/deploy-to-vercel.svg" alt="Deploy to Vercel" height="32"></a><br>
   <sub>or <a href="docs/deploy-with-an-agent.md">copy this to your LLM</a></sub>
 </p>
 
 <p align="center">
   <a href="#everything-it-takes-to-get-a-document-signed">Features</a> ·
-  <a href="#signudoc-and-docusign-side-by-side">PACTORA vs DocuSign</a> ·
+  <a href="#pactora-and-docusign-side-by-side">PACTORA vs DocuSign</a> ·
   <a href="#what-it-costs">What it costs</a> ·
   <a href="#get-started">Get started</a> ·
   <a href="docs/self-hosting.md">Self-hosting guide</a>
 </p>
 
 ## Why PACTORA
+
+**Unlimited signatures, documents and users, on a perpetual licence.** PACTORA charges nothing per signature, envelope or seat, has no licence server and no mandatory subscription, and runs in accounts you own. See [Licensing and operating economics](docs/pactora/licensing.md).
+
+**Write agreements, not just sign them.** The Document Builder composes proposals, NDAs, statements of work and offer letters from blocks, pricing tables and variables, then opens a ready-to-send envelope with every signature field placed. No uploads, no dragging boxes around.
+
+**Agreements stay managed after signing.** Completed envelopes become a searchable repository with counterparty, value, dates and tags, and the owner is reminded before an agreement ends.
 
 **No seats to pay for.** PACTORA is open source, and the Deploy button sets it up on free plans from Vercel, Neon and Resend, which carry about 250 documents a month for $0. A 15-person team pays DocuSign $8,100 a year for Business Pro seats, or $5,400 for Standard. PACTORA costs the same whether one person sends or fifty.
 
@@ -47,6 +51,14 @@ Upload a PDF, add up to 25 signers in the order they sign, or have some of them 
 <p align="center">
   <sub>The organization, people and documents in these screenshots are made up.</sub>
 </p>
+
+### Write an agreement instead of uploading one
+
+Open **Create** and start from a blank page or a starter: mutual NDA, services agreement with a priced statement of work, sales proposal, offer letter or contractor agreement. Write with headings, text, lists and bold; put the details that change in `{{variables}}`; add a pricing table with quantities, line discounts, tax and totals; and drop a signature block for each signer role. The editor saves as you type and tells you what still stops the document from being sent. **Send for signature** asks who fills each role, lays the document out as a PDF, and opens the envelope's review step with signature, date and name fields already in place. Keep a document as a template to start the next one from it.
+
+### Manage agreements after they are signed
+
+**Agreements** lists every completed envelope you can see, with its counterparty, contract value, effective and end dates, renewal notice and tags. Filter to what is active, expiring soon or expired, export the list as CSV, and get an email before an agreement's renewal notice period starts.
 
 ### Signing without an account
 
@@ -113,17 +125,9 @@ PACTORA works on small screens as well as large ones: check on your documents fr
 
 DocuSign does more, and charges for it per user. PACTORA does the everyday signing loop well, and it's yours. DocuSign's plans are as [DocuSign listed them](https://ecom.docusign.com/plans-and-pricing/esignature) in November 2026, for the US.
 
-<p align="center">
-  <img src="docs/images/compare.png" alt="PACTORA and DocuSign eSignature side by side, each with a green check for: signing without an account; signing order and copy recipients; signature, initials, date, name, text and checkbox fields; dropdown and radio button fields (on DocuSign: Business Pro, $45 a seat); reusable templates; deadlines and automatic reminders; your own logo and brand color (on DocuSign: from Standard, $30 a seat); accounts for your whole team (on DocuSign: from Standard); consent to electronic records; audit trail and certificate of completion; a tamper-evident seal on the finished PDF; working on a phone; two-step sign-in; and single sign-on (on DocuSign: Enhanced, priced by sales). To tick every box on DocuSign you need Enhanced; Business Pro, at $45 per user a month, ticks all but single sign-on.">
-</p>
-
-<p align="center">
-  <img src="docs/images/only-signudoc.png" alt="Six things DocuSign doesn't offer: open source (DocuSign is closed source), runs in your own cloud (DocuSign runs only in its own), no per-seat fees (DocuSign charges $30 or $45 a seat a month), no envelope allowance (DocuSign includes 100 per user a year), every feature included (DocuSign splits them across four plans), and no cap on users (DocuSign's listed plans stop at 50).">
-</p>
-
 ### Price and ownership
 
-|                                  | PACTORA                                                         | DocuSign eSignature                                                                      |
+|                                  | PACTORA                                                          | DocuSign eSignature                                                                      |
 | -------------------------------- | ---------------------------------------------------------------- | ---------------------------------------------------------------------------------------- |
 | **Price**                        | Free and open source, on free plans from Vercel, Neon and Resend | $11 (Personal), $30 (Standard) or $45 (Business Pro) per user a month, on an annual plan |
 | **Envelopes**                    | No limit of its own. The free plans carry about 250 a month      | 5 a month on Personal, 100 per user a year on Standard and Business Pro                  |
@@ -134,7 +138,7 @@ DocuSign does more, and charges for it per user. PACTORA does the everyday signi
 
 ### The signing loop
 
-|                                              | PACTORA                                                                                                                    | DocuSign eSignature                                                          |
+|                                              | PACTORA                                                                                                                     | DocuSign eSignature                                                          |
 | -------------------------------------------- | --------------------------------------------------------------------------------------------------------------------------- | ---------------------------------------------------------------------------- |
 | **Signing without an account**               | ✅                                                                                                                          | ✅                                                                           |
 | **Signing order**                            | ✅ in order, at the same time, or mixed, up to 25 signers                                                                   | ✅ in order, at the same time, or mixed                                      |
@@ -156,7 +160,7 @@ DocuSign does more, and charges for it per user. PACTORA does the everyday signi
 
 ### Where DocuSign does more
 
-|                                                         | PACTORA                                                            | DocuSign eSignature                                   |
+|                                                         | PACTORA                                                             | DocuSign eSignature                                   |
 | ------------------------------------------------------- | ------------------------------------------------------------------- | ----------------------------------------------------- |
 | **More than one document per envelope, and Word files** | — PDF only, one per envelope                                        | ✅                                                    |
 | **Web forms, payments**                                 | —                                                                   | ✅ on Business Pro                                    |
@@ -172,7 +176,7 @@ If your agreements run through Salesforce, need SMS checks or ID document checks
 
 PACTORA is free, and the Deploy button puts it on free plans from Vercel, Neon and Resend. Those plans carry about **250 documents a month**, however many people send them, before anything costs money. That is the first row below, and the rows after it are what you pay once you pass it.
 
-| Documents sent in a year                                       | PACTORA                                      | DocuSign Standard     | DocuSign Business Pro |
+| Documents sent in a year                                       | PACTORA                                       | DocuSign Standard     | DocuSign Business Pro |
 | -------------------------------------------------------------- | --------------------------------------------- | --------------------- | --------------------- |
 | **3,000**: 250 a month, the most the free plans carry          | **$0**                                        | $10,800, for 30 seats | $16,200, for 30 seats |
 | **5,000**: the most DocuSign's listed plans include            | $240, for Vercel Pro                          | $18,000, for 50 seats | $27,000, for 50 seats |
@@ -180,10 +184,6 @@ PACTORA is free, and the Deploy button puts it on free plans from Vercel, Neon a
 | **More than that**                                             | $480, for Vercel Pro and Resend Pro, plus use | Quoted by sales       | Quoted by sales       |
 
 DocuSign includes 100 envelopes per user a year, so its price for a number of documents is the seats it takes to send them. PACTORA has no seats. A team of 15, for example:
-
-<p align="center">
-  <img src="docs/images/price.png" alt="15 people, one year. DocuSign Business Pro: 15 seats at $45 a month each is $8,100 a year, with 1,500 envelopes included, and person 16 adds $540 a year. On DocuSign Standard, at $30 a seat, the same team pays $5,400 a year and goes without dropdown and radio fields. PACTORA: $0 a year, about 250 documents a month on the free plans, and person 16 adds $0. It runs on the free plans of Vercel, Neon and Resend. Vercel keeps its free plan for personal, non-commercial use: a company on Vercel Pro pays $20 a month, whatever its size. That team keeps $8,100 a year, or $7,860 on Vercel Pro.">
-</p>
 
 ### Where the $0 limit comes from
 
@@ -267,12 +267,13 @@ Your install carries your organization's name, and your organization is responsi
 - [Backup and restore](docs/backup-and-restore.md): daily backups to a second Blob store, and restoring one.
 - [SOC 2 pack](docs/soc2/README.md) and [Part 11 validation pack](docs/part11/README.md): starting documents for an audit or a validation.
 - [Deploying with an AI agent](docs/deploy-with-an-agent.md): every screen of the deploy, for an agent that uses your browser.
+- [Release notes and deployment](docs/pactora/release.md), [feature-gap matrix](docs/pactora/feature-gap-matrix.md) and [dependency review](docs/pactora/dependency-review.md).
 - [Development](docs/development.md): running PACTORA locally, storage, the database, email, tests and the code's layout.
 - [Contributing](CONTRIBUTING.md) and [Security](SECURITY.md).
 
 ## License and credits
 
-PACTORA is [MIT licensed](LICENSE). Copyright © 2026 Nyllon Software. It redistributes third-party assets, including bundled fonts and PDF.js, under their own licenses: see [THIRD_PARTY_NOTICES.md](THIRD_PARTY_NOTICES.md).
+PACTORA is [MIT licensed](LICENSE). It is built on [SignuDoc](https://github.com/NYLLON-SOFTWARE/SignuDoc), copyright © 2026 Nyllon Software, imported with its full history; PACTORA's additions are copyright © 2026 PACTORA contributors. It redistributes third-party assets, including bundled fonts and PDF.js, under their own licenses: see [THIRD_PARTY_NOTICES.md](THIRD_PARTY_NOTICES.md).
 
 The project has no email address of its own. Report a security problem privately through GitHub, as [SECURITY.md](SECURITY.md) describes. For help with one particular site that runs PACTORA, write to the organization that runs it.
 
